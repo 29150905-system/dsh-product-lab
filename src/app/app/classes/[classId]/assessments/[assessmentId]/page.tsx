@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAppStore } from "@/lib/use-app-store";
 import { average, classStudents, latestScores, profileKey } from "@/lib/store";
+import { DAILY_LIMIT, consumeGeneration, remainingGenerations } from "@/lib/usage";
 import type { Student } from "@/lib/types";
+
+type GenerateResult = { ok: true } | { ok: false; message: string };
 
 export default function AssessmentPage() {
   return (
@@ -20,15 +23,36 @@ function AssessmentContent() {
   const classId = params?.classId ?? "";
   const assessmentId = params?.assessmentId ?? "";
   const { data, saveProfile } = useAppStore();
+
   const [open, setOpen] = useState<Student | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"" | "one" | "all">("");
+  const [draftMessage, setDraftMessage] = useState("");
+  const [remaining, setRemaining] = useState(0);
+  const [batch, setBatch] = useState({
+    running: false,
+    done: 0,
+    total: 0,
+    failed: 0,
+  });
+
+  const currentProfile =
+    data && open ? data.profiles[profileKey(assessmentId, open.id)] : undefined;
+
+  useEffect(() => {
+    setRemaining(remainingGenerations());
+  }, []);
+
+  useEffect(() => {
+    setDraftMessage(currentProfile?.message ?? "");
+  }, [open?.id, currentProfile?.updatedAt]);
 
   if (!data) return <PageSkeleton />;
 
-  const klass = data.classes.find((item) => item.id === classId);
-  const assessment = data.assessments.find((item) => item.id === assessmentId);
+  const store = data;
+  const klass = store.classes.find((item) => item.id === classId);
+  const assessment = store.assessments.find((item) => item.id === assessmentId);
   if (!klass || !assessment) {
     return (
       <div className="px-5 pt-8">
@@ -42,25 +66,34 @@ function AssessmentContent() {
     );
   }
 
-  const students = classStudents(data, classId);
-  const scores = latestScores(data, assessmentId);
+  const exam = assessment;
+  const students = classStudents(store, classId);
+  const scores = latestScores(store, assessmentId);
   const values = Object.values(scores);
   const avg = average(values);
-  const store = data;
-  const exam = assessment;
-  const currentKey = open ? profileKey(assessmentId, open.id) : "";
-  const current = open ? store.profiles[currentKey] : undefined;
+  const generatedCount = students.filter((student) =>
+    Boolean(store.profiles[profileKey(assessmentId, student.id)]),
+  ).length;
+  const missingCount = students.filter(
+    (student) =>
+      scores[student.id] !== undefined &&
+      !store.profiles[profileKey(assessmentId, student.id)],
+  ).length;
 
-  async function generate(student: Student, force = false) {
+  async function requestProfile(student: Student): Promise<GenerateResult> {
     const score = scores[student.id];
-    if (score === undefined) return;
-    setOpen(student);
-    setError(null);
-    setCopied(false);
-    const key = profileKey(assessmentId, student.id);
-    if (store.profiles[key] && !force) return;
+    if (score === undefined) {
+      return { ok: false, message: "这个学生还没有录成绩。" };
+    }
+    if (!consumeGeneration(1)) {
+      setRemaining(remainingGenerations());
+      return {
+        ok: false,
+        message: `今日生成次数已用完（每天 ${DAILY_LIMIT} 次），明天再试。`,
+      };
+    }
+    setRemaining(remainingGenerations());
 
-    setLoading(true);
     try {
       const response = await fetch("/api/profile", {
         method: "POST",
@@ -77,35 +110,110 @@ function AssessmentContent() {
         ok?: boolean;
         profile?: string;
         message?: string;
-        messageText?: string;
       };
       if (!response.ok || !result.ok || !result.profile || !result.message) {
-        setError(
-          (result as { message?: string }).message ??
-            "生成失败，请稍后重试。",
-        );
-        return;
+        return {
+          ok: false,
+          message: result.message ?? `生成失败（HTTP ${response.status}）`,
+        };
       }
       saveProfile(assessmentId, student.id, {
         profile: result.profile,
         message: result.message,
       });
+      return { ok: true };
     } catch {
-      setError("网络异常，请检查网络后重试。");
-    } finally {
-      setLoading(false);
+      return { ok: false, message: "网络异常，请检查网络后重试。" };
     }
   }
 
-  async function copyMessage() {
-    if (!current) return;
+  function persistDraft() {
+    if (!open || !currentProfile) return;
+    const trimmed = draftMessage.trim();
+    if (!trimmed || trimmed === currentProfile.message) return;
+    saveProfile(assessmentId, open.id, {
+      profile: currentProfile.profile,
+      message: trimmed,
+    });
+  }
+
+  function closeSheet() {
+    persistDraft();
+    setOpen(null);
+    setError(null);
+    setCopied("");
+  }
+
+  async function generate(student: Student, force = false) {
+    const key = profileKey(assessmentId, student.id);
+    if (store.profiles[key] && !force) {
+      setOpen(student);
+      setError(null);
+      setCopied("");
+      return;
+    }
+    setOpen(student);
+    setError(null);
+    setCopied("");
+    setLoading(true);
+    const result = await requestProfile(student);
+    if (!result.ok) setError(result.message);
+    setLoading(false);
+  }
+
+  async function generateAll() {
+    if (batch.running) return;
+    if (remaining <= 0) {
+      setError(`今日生成次数已用完（每天 ${DAILY_LIMIT} 次），明天再试。`);
+      return;
+    }
+    const targets = students.filter(
+      (student) =>
+        scores[student.id] !== undefined &&
+        !store.profiles[profileKey(assessmentId, student.id)],
+    );
+    if (targets.length === 0) {
+      setError("全班都已经生成过了。");
+      return;
+    }
+
+    setError(null);
+    setBatch({ running: true, done: 0, total: targets.length, failed: 0 });
+    let done = 0;
+    let failed = 0;
+    for (const student of targets) {
+      const result = await requestProfile(student);
+      if (result.ok) done += 1;
+      else failed += 1;
+      setBatch({ running: true, done, total: targets.length, failed });
+      if (!result.ok && result.message.includes("次数已用完")) break;
+    }
+    setBatch({ running: false, done, total: targets.length, failed });
+  }
+
+  async function copyText(text: string, kind: "one" | "all") {
     try {
-      await navigator.clipboard.writeText(current.message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      setTimeout(() => setCopied(""), 2000);
     } catch {
       setError("复制失败，请手动选中复制。");
     }
+  }
+
+  async function copyAll() {
+    const entries: string[] = [];
+    for (const student of students) {
+      const profile = store.profiles[profileKey(assessmentId, student.id)];
+      const score = scores[student.id];
+      if (!profile || score === undefined) continue;
+      entries.push(`【${student.name}】${score} 分\n${profile.message}`);
+    }
+    if (entries.length === 0) {
+      setError("还没有生成任何话术。");
+      return;
+    }
+    await copyText(entries.join("\n\n---\n\n"), "all");
   }
 
   return (
@@ -114,16 +222,53 @@ function AssessmentContent() {
         <Link href={`/app/classes/${classId}`} className="text-sm text-zinc-500">
           ← {klass.name}
         </Link>
-        <h1 className="mt-3 text-2xl font-bold tracking-tight">{assessment.name}</h1>
+        <h1 className="mt-3 text-2xl font-bold tracking-tight">{exam.name}</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          {assessment.date} · 满分 {assessment.fullScore} · 班均 {avg || "—"}
+          {exam.date} · 满分 {exam.fullScore} · 班均 {avg || "—"}
         </p>
       </header>
 
       <div className="mt-5 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
         <p className="text-xs leading-5 text-zinc-500">
-          点「生成」，用匿名化的成绩数据生成每个学生的学情档案和家长话术。姓名不会发送给模型。
+          用匿名化的成绩数据生成学情档案和家长话术，姓名不会发送给模型。
         </p>
+
+        <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-400">
+          <span>
+            今日剩余 {remaining} / {DAILY_LIMIT} 次
+          </span>
+          <span>
+            已生成 {generatedCount} / {students.length}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={generateAll}
+          disabled={batch.running || remaining === 0 || missingCount === 0}
+          className="mt-3 w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+        >
+          {batch.running
+            ? `正在生成 ${batch.done} / ${batch.total}`
+            : `生成全班（${missingCount} 人）`}
+        </button>
+
+        {batch.running ? (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full rounded-full bg-amber-500 transition-all"
+              style={{
+                width: `${batch.total === 0 ? 0 : (batch.done / batch.total) * 100}%`,
+              }}
+            />
+          </div>
+        ) : null}
+
+        {!batch.running && batch.total > 0 && batch.failed > 0 ? (
+          <p className="mt-2 text-[11px] text-amber-700">
+            本次有 {batch.failed} 个生成失败，可以单独重试。
+          </p>
+        ) : null}
       </div>
 
       <section className="mt-6">
@@ -136,7 +281,9 @@ function AssessmentContent() {
         <div className="mt-3 overflow-hidden rounded-3xl border border-zinc-200 bg-white">
           {students.map((student, index) => {
             const value = scores[student.id];
-            const generated = Boolean(data.profiles[profileKey(assessmentId, student.id)]);
+            const generated = Boolean(
+              store.profiles[profileKey(assessmentId, student.id)],
+            );
             return (
               <div
                 key={student.id}
@@ -153,14 +300,20 @@ function AssessmentContent() {
                 <div className="flex shrink-0 items-center gap-3">
                   <span
                     className={`text-sm ${
-                      value === undefined ? "text-zinc-300" : "font-semibold text-zinc-800"
+                      value === undefined
+                        ? "text-zinc-300"
+                        : "font-semibold text-zinc-800"
                     }`}
                   >
                     {value === undefined ? "未录" : `${value} 分`}
                   </span>
                   <button
                     type="button"
-                    disabled={value === undefined}
+                    disabled={
+                      value === undefined ||
+                      batch.running ||
+                      (!generated && remaining === 0)
+                    }
                     onClick={() => generate(student)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       value === undefined
@@ -179,6 +332,17 @@ function AssessmentContent() {
         </div>
       </section>
 
+      <button
+        type="button"
+        onClick={copyAll}
+        disabled={generatedCount === 0}
+        className="mt-4 w-full rounded-2xl border border-zinc-200 bg-white py-3 text-sm font-medium text-zinc-700 disabled:opacity-40"
+      >
+        {copied === "all"
+          ? "已复制全部话术 ✓"
+          : `复制全部话术（${generatedCount} 人）`}
+      </button>
+
       <p className="mt-6 text-center text-[11px] leading-5 text-zinc-400">
         生成内容基于匿名的成绩数据 · 姓名没有离开这台设备
       </p>
@@ -188,20 +352,20 @@ function AssessmentContent() {
           <button
             type="button"
             aria-label="关闭"
-            onClick={() => setOpen(null)}
+            onClick={closeSheet}
             className="absolute inset-0 bg-black/30"
           />
           <div className="relative z-10 max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 pb-8 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs text-zinc-400">
-                  {assessment.name} · {open.name}
+                  {exam.name} · {open.name}
                 </p>
                 <h2 className="mt-0.5 text-lg font-semibold">学情档案</h2>
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(null)}
+                onClick={closeSheet}
                 className="rounded-full px-2 py-1 text-sm text-zinc-400"
               >
                 关闭
@@ -226,22 +390,36 @@ function AssessmentContent() {
                   重试
                 </button>
               </div>
-            ) : current ? (
+            ) : currentProfile ? (
               <div className="mt-4">
                 <div className="whitespace-pre-line rounded-2xl bg-zinc-50 p-4 text-sm leading-7 text-zinc-700">
-                  {current.profile}
+                  {currentProfile.profile}
                 </div>
-                <h3 className="mt-5 text-sm font-semibold text-zinc-600">家长沟通话术</h3>
-                <div className="mt-2 rounded-2xl border border-zinc-200 p-4 text-sm leading-7 text-zinc-700">
-                  {current.message}
+
+                <div className="mt-5 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-zinc-600">
+                    家长沟通话术
+                  </h3>
+                  <span className="text-[11px] text-zinc-400">编辑后自动保存</span>
                 </div>
+                <textarea
+                  value={draftMessage}
+                  onChange={(event) => setDraftMessage(event.target.value)}
+                  onBlur={persistDraft}
+                  rows={6}
+                  className="mt-2 w-full rounded-2xl border border-zinc-200 p-4 text-sm leading-7 text-zinc-700 outline-none focus:border-zinc-400"
+                />
+
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={copyMessage}
+                    onClick={() => {
+                      persistDraft();
+                      void copyText(draftMessage, "one");
+                    }}
                     className="rounded-xl bg-zinc-900 py-2.5 text-sm font-medium text-white"
                   >
-                    {copied ? "已复制 ✓" : "复制话术"}
+                    {copied === "one" ? "已复制 ✓" : "复制话术"}
                   </button>
                   <button
                     type="button"
@@ -251,6 +429,7 @@ function AssessmentContent() {
                     重新生成
                   </button>
                 </div>
+
                 <p className="mt-4 text-center text-[11px] leading-5 text-zinc-400">
                   生成内容基于匿名化的成绩数据
                 </p>

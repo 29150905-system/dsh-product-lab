@@ -34,6 +34,28 @@ message 要求：
 - 说清本次成绩的大致位置（不说名次）、一个亮点、一个需要关注的点、一条家庭配合建议
 - 不制造焦虑，结尾留一句「有情况随时联系我」`;
 
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function clientKey(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim() || "unknown";
+  return "local";
+}
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) return true;
+  bucket.count += 1;
+  return false;
+}
+
 function badRequest(message: string) {
   return NextResponse.json({ error: "bad_request", message }, { status: 400 });
 }
@@ -98,6 +120,16 @@ export async function POST(request: Request) {
           "还没有配置 DEEPSEEK_API_KEY。本地请写到项目根目录的 .env.local，线上请加到 Vercel 的环境变量。",
       },
       { status: 500 },
+    );
+  }
+
+  if (isRateLimited(clientKey(request))) {
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        message: "请求太频繁了，请过几分钟再试。",
+      },
+      { status: 429 },
     );
   }
 
