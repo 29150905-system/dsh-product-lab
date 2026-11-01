@@ -1,6 +1,7 @@
 import type {
   AppData,
   Assessment,
+  GeneratedProfile,
   Klass,
   Score,
   Stage,
@@ -17,7 +18,14 @@ export function uid(prefix: string): string {
 }
 
 export function emptyData(): AppData {
-  return { version: 1, classes: [], students: [], assessments: [], scores: [] };
+  return {
+    version: 1,
+    classes: [],
+    students: [],
+    assessments: [],
+    scores: [],
+    profiles: {},
+  };
 }
 
 export function seedData(): AppData {
@@ -72,6 +80,7 @@ export function seedData(): AppData {
       },
     ],
     scores,
+    profiles: {},
   };
 }
 
@@ -102,7 +111,7 @@ export function loadData(): AppData {
       saveData(seeded);
       return seeded;
     }
-    return parsed;
+    return { ...parsed, profiles: parsed.profiles ?? {} };
   } catch {
     const seeded = seedData();
     saveData(seeded);
@@ -215,6 +224,10 @@ export function average(values: number[]): number {
   if (values.length === 0) return 0;
   const sum = values.reduce((acc, value) => acc + value, 0);
   return Math.round((sum / values.length) * 10) / 10;
+}
+
+export function profileKey(assessmentId: string, studentId: string): string {
+  return `${assessmentId}:${studentId}`;
 }
 
 export function todayISO(): string {

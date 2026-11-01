@@ -30,10 +30,17 @@ export interface Score {
   value: number;
 }
 
+export interface GeneratedProfile {
+  profile: string;
+  message: string;
+  updatedAt: number;
+}
+
 export interface AppData {
   version: 1;
   classes: Klass[];
   students: Student[];
   assessments: Assessment[];
   scores: Score[];
+  profiles: Record<string, GeneratedProfile>;
 }

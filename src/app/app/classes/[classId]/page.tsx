@@ -109,8 +109,14 @@ function ClassDetailContent() {
           <p className="text-sm text-zinc-500">还没有考试记录，先录一次成绩吧。</p>
         )}
         <Link
-          href={`/app/classes/${classId}/exam/new`}
+          href={`/app/classes/${classId}/assessments/${latest.id}`}
           className="mt-4 block rounded-xl bg-zinc-900 py-2.5 text-center text-sm font-medium text-white"
+        >
+          查看本次学情
+        </Link>
+        <Link
+          href={`/app/classes/${classId}/exam/new`}
+          className="mt-2 block rounded-xl border border-zinc-200 py-2.5 text-center text-sm font-medium text-zinc-700"
         >
           + 录入新考试
         </Link>

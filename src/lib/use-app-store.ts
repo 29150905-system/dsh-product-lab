@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AppData, Assessment, Stage } from "./types";
-import { createStudents, emptyData, loadData, saveData, uid } from "./store";
+import type { AppData, Assessment, GeneratedProfile, Stage } from "./types";
+import { createStudents, emptyData, loadData, profileKey, saveData, uid } from "./store";
 
 export interface NewAssessmentInput {
   classId: string;
@@ -85,5 +85,23 @@ export function useAppStore() {
     [mutate],
   );
 
-  return { data, addClass, addStudents, addAssessment };
+  const saveProfile = useCallback(
+    (
+      assessmentId: string,
+      studentId: string,
+      input: Pick<GeneratedProfile, "profile" | "message">,
+    ) => {
+      const key = profileKey(assessmentId, studentId);
+      mutate((current) => ({
+        ...current,
+        profiles: {
+          ...current.profiles,
+          [key]: { ...input, updatedAt: Date.now() },
+        },
+      }));
+    },
+    [mutate],
+  );
+
+  return { data, addClass, addStudents, addAssessment, saveProfile };
 }
