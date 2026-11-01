@@ -3,7 +3,7 @@
   "short_name": "景明",
   "description": "把一次考试后的家长沟通，变成 10 分钟的事。",
   "lang": "zh-CN",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

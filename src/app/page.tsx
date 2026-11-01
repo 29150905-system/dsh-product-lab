@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const steps = [
   { title: "建班级", desc: "导入学生名单，一分钟建好一个班" },
   { title: "录成绩", desc: "新建一次考试，粘贴整列分数" },
@@ -22,9 +24,12 @@ export default function Home() {
           <span>课堂记录 · 即将上线</span>
           <span>教师成长 · 即将上线</span>
         </nav>
-        <button className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700">
+        <Link
+          href="/app"
+          className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
+        >
           免费试用
-        </button>
+        </Link>
       </header>
 
       <main className="mx-auto max-w-6xl px-6">
@@ -42,17 +47,23 @@ export default function Home() {
             导入成绩，自动生成每个学生的学情档案，以及可直接修改的家长沟通话术。
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700">
+            <Link
+              href="/app"
+              className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
+            >
               免费试用
-            </button>
-            <button className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 transition hover:bg-white">
+            </Link>
+            <Link
+              href="#sample"
+              className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 transition hover:bg-white"
+            >
               看示例
-            </button>
+            </Link>
           </div>
           <p className="mt-4 text-xs text-zinc-400">学生数据只存在本机 · 生成前自动匿名化</p>
         </section>
 
-        <section className="grid gap-6 pb-16 md:grid-cols-2">
+        <section id="sample" className="grid gap-6 pb-16 md:grid-cols-2">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
