@@ -50,6 +50,7 @@
 ## 端策略（手机优先）
 
 - **主端：手机** —— 先做 PWA（Chrome「添加到主屏幕」，全屏像 App），W6–W7 用 Capacitor 打包 Android APK
+- **Android debug APK v0.1.0**：GitHub Release `android-v0.1.0`（Capacitor 套壳，加载线上站点，约 4 MB，仅供侧载测试）
 - **辅助端：Windows** —— Edge「安装此站点为应用」；后期用 Electron/Tauri 出安装包
 - **一套代码**：Next.js Web + PWA；原生壳只是外壳，不重写 UI/逻辑
 - 手机端交互原则：单手可操作、列表卡片化、主操作固定在底部
