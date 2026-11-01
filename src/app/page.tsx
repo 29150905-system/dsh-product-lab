@@ -123,6 +123,17 @@ export default function Home() {
       <footer className="border-t border-zinc-200 py-8 text-center text-xs text-zinc-400">
         <p>景明 · 把时间还给教学</p>
         <p className="mt-1">可添加到手机主屏幕，像 App 一样使用</p>
+        <p className="mt-3">
+          <a
+            href="/downloads/jingming-teacher.apk"
+            download
+            className="font-medium text-zinc-700 underline underline-offset-2"
+          >
+            安卓版 APK 下载
+          </a>
+          <span className="mx-2 text-zinc-300">·</span>
+          <span>安装时需允许「未知来源」</span>
+        </p>
       </footer>
     </div>
   );
