@@ -110,7 +110,8 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-zinc-200 py-8 text-center text-xs text-zinc-400">
-        景明 · 把时间还给教学
+        <p>景明 · 把时间还给教学</p>
+        <p className="mt-1">可添加到手机主屏幕，像 App 一样使用</p>
       </footer>
     </div>
   );
