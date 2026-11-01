@@ -1,0 +1,73 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Sync Capacitor
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Copy APK
+        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk jingming-android-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jingming-android-debug
+          path: jingming-android-debug.apk
+
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.1.0
+          name: 景明 Android v0.1.0
+          body: |
+            自动构建的 Debug APK，可直接侧载测试。
+
+            - 打开后加载 https://dsh-product-lab.vercel.app
+            - 需要联网
+          files: jingming-android-debug.apk
+          token: ${{ secrets.GITHUB_TOKEN }}

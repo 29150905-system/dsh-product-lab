@@ -1,0 +1,12 @@
+{
+  "appId": "com.jingming.teacher",
+  "appName": "景明",
+  "webDir": "www",
+  "server": {
+    "url": "https://dsh-product-lab.vercel.app",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
