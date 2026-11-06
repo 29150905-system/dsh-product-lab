@@ -60,7 +60,7 @@ export default function Home() {
               看示例
             </Link>
           </div>
-          <p className="mt-4 text-xs text-zinc-400">学生数据只存在本机 · 生成前自动匿名化</p>
+          <p className="mt-4 text-xs text-zinc-400">数据默认只存本机 · 生成前自动匿名化 · 可选端到端加密同步</p>
         </section>
 
         <section id="sample" className="grid gap-6 pb-16 md:grid-cols-2">

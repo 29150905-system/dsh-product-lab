@@ -46,9 +46,12 @@ export default function AppHomePage() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight">学情</h1>
           <p className="mt-1 text-sm text-zinc-500">选一个班级，开始今天的记录</p>
         </div>
-        <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] text-zinc-400">
-          示例数据
-        </span>
+        <Link
+          href="/app/settings"
+          className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] text-zinc-500"
+        >
+          数据同步
+        </Link>
       </header>
 
       <section className="mt-6 space-y-3">

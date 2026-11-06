@@ -91,6 +91,7 @@ export interface AttendanceMark {
 
 export interface AppData {
   version: 1;
+  updatedAt?: number;
   classes: Klass[];
   students: Student[];
   assessments: Assessment[];

@@ -25,6 +25,7 @@ export function uid(prefix: string): string {
 export function emptyData(): AppData {
   return {
     version: 1,
+    updatedAt: 0,
     classes: [],
     students: [],
     assessments: [],
@@ -84,6 +85,7 @@ export function seedData(): AppData {
 
   return {
     version: 1,
+    updatedAt: now,
     classes: [
       {
         id: classId,
@@ -163,6 +165,7 @@ export function loadData(): AppData {
     }
     return {
       ...parsed,
+      updatedAt: parsed.updatedAt ?? 0,
       profiles: parsed.profiles ?? {},
       reports: parsed.reports ?? {},
       lessons: parsed.lessons ?? [],

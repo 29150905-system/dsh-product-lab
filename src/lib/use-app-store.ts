@@ -12,6 +12,85 @@ import type {
   Stage,
 } from "./types";
 import { createStudents, emptyData, loadData, profileKey, reportKey, saveData, uid } from "./store";
+import {
+  decryptData,
+  encryptData,
+  fetchRemote,
+  getDeviceId,
+  pushRemote,
+  readSyncConfig,
+  writeSyncConfig,
+} from "./sync";
+
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingPush: AppData | null = null;
+
+async function pushNow(data: AppData): Promise<boolean> {
+  const config = readSyncConfig();
+  if (!config?.enabled) return false;
+  try {
+    const { iv, ct } = await encryptData(data, config.code);
+    const result = await pushRemote(config.code, {
+      updatedAt: data.updatedAt ?? Date.now(),
+      iv,
+      ct,
+      deviceId: getDeviceId(),
+    });
+    if (result.ok) {
+      writeSyncConfig({ ...config, lastSyncAt: Date.now() });
+      return true;
+    }
+  } catch {
+    // 网络或加密失败：下次改动会再试
+  }
+  return false;
+}
+
+function schedulePush(data: AppData) {
+  const config = readSyncConfig();
+  if (!config?.enabled) return;
+  pendingPush = data;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    const latest = pendingPush;
+    pendingPush = null;
+    if (latest) void pushNow(latest);
+  }, 1200);
+}
+
+export async function pushCurrent(data: AppData): Promise<boolean> {
+  return pushNow(data);
+}
+
+export async function pullIfNewer(
+  local: AppData,
+  apply: (data: AppData) => void,
+): Promise<"applied" | "pushed" | "none"> {
+  const config = readSyncConfig();
+  if (!config?.enabled) return "none";
+  const remote = await fetchRemote(config.code);
+  if (!remote.ok || !remote.doc) return "none";
+  const remoteAt = remote.doc.updatedAt ?? 0;
+  const localAt = local.updatedAt ?? 0;
+  if (remoteAt > localAt) {
+    try {
+      const incoming = await decryptData(remote.doc.iv, remote.doc.ct, config.code);
+      const next: AppData = { ...incoming, updatedAt: remoteAt };
+      saveData(next);
+      writeSyncConfig({ ...config, lastSyncAt: Date.now() });
+      apply(next);
+      return "applied";
+    } catch {
+      return "none";
+    }
+  }
+  if (localAt > remoteAt) {
+    const ok = await pushNow(local);
+    return ok ? "pushed" : "none";
+  }
+  return "none";
+}
 
 export interface NewAssessmentInput {
   classId: string;
@@ -25,13 +104,16 @@ export function useAppStore() {
   const [data, setData] = useState<AppData | null>(null);
 
   useEffect(() => {
-    setData(loadData());
+    const local = loadData();
+    setData(local);
+    void pullIfNewer(local, (incoming) => setData(incoming));
   }, []);
 
   const mutate = useCallback((updater: (current: AppData) => AppData) => {
     setData((current) => {
-      const next = updater(current ?? emptyData());
+      const next = { ...updater(current ?? emptyData()), updatedAt: Date.now() };
       saveData(next);
+      schedulePush(next);
       return next;
     });
   }, []);
