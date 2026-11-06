@@ -21,8 +21,8 @@ export default function Home() {
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-500 md:flex">
           <span className="text-zinc-900">学情与沟通</span>
-          <span>课堂记录 · 即将上线</span>
-          <span>教师成长 · 即将上线</span>
+          <span>提问点名 · 已上线</span>
+          <span>出勤表 · 已上线</span>
         </nav>
         <Link
           href="/app"
@@ -44,7 +44,7 @@ export default function Home() {
             变成 <span className="text-amber-600">10 分钟</span> 的事
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-600">
-            导入成绩，自动生成每个学生的学情档案，以及可直接修改的家长沟通话术。
+            导入成绩，自动生成每个学生的学情档案和家长话术；上课随机点名记回答、一键记出勤——一个 App 管完班主任日常。
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
@@ -129,7 +129,7 @@ export default function Home() {
             download
             className="font-medium text-zinc-700 underline underline-offset-2"
           >
-            安卓版 APK 下载
+            安卓版 APK 下载（v3.1.0）
           </a>
           <span className="mx-2 text-zinc-300">·</span>
           <span>安装时需允许「未知来源」</span>
