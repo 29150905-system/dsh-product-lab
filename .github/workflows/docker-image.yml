@@ -1,0 +1,82 @@
+name: Docker Image (ACR)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/docker-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Check ACR secrets
+        id: acr
+        env:
+          REGISTRY: ${{ secrets.ACR_REGISTRY }}
+          USERNAME: ${{ secrets.ACR_USERNAME }}
+          PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+          REPO: ${{ secrets.ACR_REPO }}
+        run: |
+          if [ -n "$REGISTRY" ] && [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] && [ -n "$NAMESPACE" ] && [ -n "$REPO" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ACR secrets not configured; building only (no push)."
+          fi
+
+      - name: Build (no push)
+        if: steps.acr.outputs.enabled != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: jingming-web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Login to ACR
+        if: steps.acr.outputs.enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Docker metadata
+        if: steps.acr.outputs.enabled == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/${{ secrets.ACR_REPO }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest
+
+      - name: Build and push
+        if: steps.acr.outputs.enabled == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
