@@ -6,6 +6,5 @@ node_modules
 .env.local
 .env*.local
 mobile
-*.apk
 *.zip
 tsconfig.tsbuildinfo
