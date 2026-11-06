@@ -47,6 +47,27 @@ export interface ClassReport {
   updatedAt: number;
 }
 
+/** 点名状态：到 / 迟到 / 请假 / 缺勤 */
+export type AttendanceStatus = "present" | "late" | "leave" | "absent";
+
+export interface Lesson {
+  id: string;
+  classId: string;
+  date: string;
+  period: string;
+  subject?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Attendance {
+  lessonId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  updatedAt: number;
+}
+
 export interface AppData {
   version: 1;
   classes: Klass[];
@@ -55,4 +76,6 @@ export interface AppData {
   scores: Score[];
   profiles: Record<string, GeneratedProfile>;
   reports: Record<string, ClassReport>;
+  lessons: Lesson[];
+  attendance: Attendance[];
 }

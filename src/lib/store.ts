@@ -1,8 +1,11 @@
 import type {
   AppData,
   Assessment,
+  Attendance,
+  AttendanceStatus,
   GeneratedProfile,
   Klass,
+  Lesson,
   Score,
   Stage,
   Student,
@@ -26,6 +29,8 @@ export function emptyData(): AppData {
     scores: [],
     profiles: {},
     reports: {},
+    lessons: [],
+    attendance: [],
   };
 }
 
@@ -58,6 +63,26 @@ export function seedData(): AppData {
     value: values[index] ?? 0,
   }));
 
+  const lessonId = "lsn_demo_1";
+  const lessonStatuses: AttendanceStatus[] = [
+    "present",
+    "present",
+    "late",
+    "present",
+    "present",
+    "present",
+    "present",
+    "absent",
+    "present",
+    "present",
+  ];
+  const attendance: Attendance[] = students.map((student, index) => ({
+    lessonId,
+    studentId: student.id,
+    status: lessonStatuses[index] ?? "present",
+    updatedAt: now,
+  }));
+
   return {
     version: 1,
     classes: [
@@ -83,6 +108,19 @@ export function seedData(): AppData {
     scores,
     profiles: {},
     reports: {},
+    lessons: [
+      {
+        id: lessonId,
+        classId,
+        date: "2026-10-21",
+        period: "第 3 节",
+        subject: "数学",
+        note: "函数单调性复习，小测 10 分钟",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    attendance,
   };
 }
 
@@ -117,6 +155,8 @@ export function loadData(): AppData {
       ...parsed,
       profiles: parsed.profiles ?? {},
       reports: parsed.reports ?? {},
+      lessons: parsed.lessons ?? [],
+      attendance: parsed.attendance ?? [],
     };
   } catch {
     const seeded = seedData();
@@ -238,6 +278,109 @@ export function profileKey(assessmentId: string, studentId: string): string {
 
 export function reportKey(assessmentId: string): string {
   return assessmentId;
+}
+
+/** 点名状态顺序：点一下按这个循环切换（到 → 缺勤 → 迟到 → 请假 → 到） */
+export const ATTENDANCE_CYCLE: AttendanceStatus[] = ["present", "absent", "late", "leave"];
+
+export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
+  present: "到",
+  late: "迟到",
+  leave: "请假",
+  absent: "缺勤",
+};
+
+export function defaultPeriodLabel(now = new Date()): string {
+  const hour = now.getHours();
+  let index = 1;
+  if (hour >= 8 && hour < 9) index = 1;
+  else if (hour >= 9 && hour < 10) index = 2;
+  else if (hour >= 10 && hour < 11) index = 3;
+  else if (hour >= 11 && hour < 12) index = 4;
+  else if (hour >= 13 && hour < 14) index = 5;
+  else if (hour >= 14 && hour < 15) index = 6;
+  else if (hour >= 15 && hour < 16) index = 7;
+  else if (hour >= 16 && hour < 17) index = 8;
+  else index = hour < 8 ? 1 : 1;
+  return `第 ${index} 节`;
+}
+
+export function classLessons(data: AppData, classId: string): Lesson[] {
+  return data.lessons
+    .filter((lesson) => lesson.classId === classId)
+    .sort((a, b) => {
+      if (a.date === b.date) return b.createdAt - a.createdAt;
+      return a.date < b.date ? 1 : -1;
+    });
+}
+
+export function lessonAttendance(
+  data: AppData,
+  lessonId: string,
+): Record<string, AttendanceStatus> {
+  const map: Record<string, AttendanceStatus> = {};
+  for (const record of data.attendance) {
+    if (record.lessonId === lessonId) map[record.studentId] = record.status;
+  }
+  return map;
+}
+
+export interface AttendanceCounts {
+  total: number;
+  present: number;
+  late: number;
+  leave: number;
+  absent: number;
+  /** 实到 = 到 + 迟到 */
+  signedIn: number;
+}
+
+export function attendanceCounts(
+  data: AppData,
+  lessonId: string,
+  studentIds: string[],
+): AttendanceCounts {
+  const map = lessonAttendance(data, lessonId);
+  const counts: AttendanceCounts = {
+    total: studentIds.length,
+    present: 0,
+    late: 0,
+    leave: 0,
+    absent: 0,
+    signedIn: 0,
+  };
+  for (const studentId of studentIds) {
+    const status = map[studentId] ?? "present";
+    if (status === "present") counts.present += 1;
+    else if (status === "late") counts.late += 1;
+    else if (status === "leave") counts.leave += 1;
+    else counts.absent += 1;
+  }
+  counts.signedIn = counts.present + counts.late;
+  return counts;
+}
+
+export interface StudentAttendanceSummary {
+  lessons: number;
+  absent: number;
+  late: number;
+  leave: number;
+}
+
+export function studentAttendanceSummary(
+  data: AppData,
+  classId: string,
+  studentId: string,
+): StudentAttendanceSummary {
+  const lessons = classLessons(data, classId);
+  const summary: StudentAttendanceSummary = { lessons: lessons.length, absent: 0, late: 0, leave: 0 };
+  for (const lesson of lessons) {
+    const status = lessonAttendance(data, lesson.id)[studentId];
+    if (status === "absent") summary.absent += 1;
+    else if (status === "late") summary.late += 1;
+    else if (status === "leave") summary.leave += 1;
+  }
+  return summary;
 }
 
 export interface OverviewStats {

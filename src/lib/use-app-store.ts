@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AppData, Assessment, ClassReport, GeneratedProfile, Stage } from "./types";
+import type {
+  AppData,
+  Assessment,
+  AttendanceStatus,
+  ClassReport,
+  GeneratedProfile,
+  Lesson,
+  Stage,
+} from "./types";
 import { createStudents, emptyData, loadData, profileKey, reportKey, saveData, uid } from "./store";
 
 export interface NewAssessmentInput {
@@ -117,5 +125,124 @@ export function useAppStore() {
     [mutate],
   );
 
-  return { data, addClass, addStudents, addAssessment, saveProfile, saveReport };
+  const addLesson = useCallback(
+    (input: {
+      classId: string;
+      date: string;
+      period: string;
+      subject?: string;
+      note?: string;
+      studentIds: string[];
+    }): string => {
+      const id = uid("lsn");
+      const now = Date.now();
+      const lesson: Lesson = {
+        id,
+        classId: input.classId,
+        date: input.date,
+        period: input.period,
+        subject: input.subject?.trim() || undefined,
+        note: input.note?.trim() || undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      mutate((current) => ({
+        ...current,
+        lessons: [...current.lessons, lesson],
+        attendance: [
+          ...current.attendance,
+          ...input.studentIds.map((studentId) => ({
+            lessonId: id,
+            studentId,
+            status: "present" as AttendanceStatus,
+            updatedAt: now,
+          })),
+        ],
+      }));
+      return id;
+    },
+    [mutate],
+  );
+
+  const updateLesson = useCallback(
+    (
+      lessonId: string,
+      patch: Partial<Pick<Lesson, "date" | "period" | "subject" | "note">>,
+    ) => {
+      mutate((current) => ({
+        ...current,
+        lessons: current.lessons.map((lesson) =>
+          lesson.id === lessonId
+            ? {
+                ...lesson,
+                ...patch,
+                subject: patch.subject === undefined ? lesson.subject : patch.subject.trim() || undefined,
+                note: patch.note === undefined ? lesson.note : patch.note.trim() || undefined,
+                updatedAt: Date.now(),
+              }
+            : lesson,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
+  const setAttendance = useCallback(
+    (lessonId: string, studentId: string, status: AttendanceStatus) => {
+      const now = Date.now();
+      mutate((current) => {
+        const exists = current.attendance.some(
+          (record) => record.lessonId === lessonId && record.studentId === studentId,
+        );
+        return {
+          ...current,
+          attendance: exists
+            ? current.attendance.map((record) =>
+                record.lessonId === lessonId && record.studentId === studentId
+                  ? { ...record, status, updatedAt: now }
+                  : record,
+              )
+            : [...current.attendance, { lessonId, studentId, status, updatedAt: now }],
+        };
+      });
+    },
+    [mutate],
+  );
+
+  const setAllAttendance = useCallback(
+    (lessonId: string, studentIds: string[], status: AttendanceStatus) => {
+      const now = Date.now();
+      const idSet = new Set(studentIds);
+      mutate((current) => {
+        const covered = new Set(
+          current.attendance
+            .filter((record) => record.lessonId === lessonId && idSet.has(record.studentId))
+            .map((record) => record.studentId),
+        );
+        const updated = current.attendance.map((record) =>
+          record.lessonId === lessonId && idSet.has(record.studentId)
+            ? { ...record, status, updatedAt: now }
+            : record,
+        );
+        const added = studentIds
+          .filter((studentId) => !covered.has(studentId))
+          .map((studentId) => ({ lessonId, studentId, status, updatedAt: now }));
+        return { ...current, attendance: [...updated, ...added] };
+      });
+    },
+    [mutate],
+  );
+
+  return {
+    data,
+    addClass,
+    addStudents,
+    addAssessment,
+    saveProfile,
+    saveReport,
+    addLesson,
+    updateLesson,
+    setAttendance,
+    setAllAttendance,
+  };
 }
