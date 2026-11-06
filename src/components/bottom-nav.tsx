@@ -26,6 +26,16 @@ function IconClassroom() {
   );
 }
 
+function IconAttendance() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4h6v3H9z" />
+      <path d="M9 13l2 2 4-4" />
+    </svg>
+  );
+}
+
 function IconGrowth() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
@@ -40,6 +50,7 @@ function IconGrowth() {
 const tabs = [
   { href: "/app", label: "学情", icon: <IconStudents /> },
   { href: "/app/classroom", label: "课堂", icon: <IconClassroom /> },
+  { href: "/app/attendance", label: "出勤", icon: <IconAttendance /> },
   { href: "/app/growth", label: "成长", icon: <IconGrowth /> },
 ];
 

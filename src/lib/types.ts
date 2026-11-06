@@ -70,6 +70,25 @@ export interface CallRecord {
   createdAt: number;
 }
 
+/** 出勤表：班级 + 日期 + 节次 的一张点名表 */
+export interface AttendanceSheet {
+  id: string;
+  classId: string;
+  date: string;
+  period: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 出勤表的缺勤标记（只存缺勤，默认全部出勤） */
+export interface AttendanceMark {
+  sheetId: string;
+  studentId: string;
+  absent: boolean;
+  updatedAt: number;
+}
+
 export interface AppData {
   version: 1;
   classes: Klass[];
@@ -80,4 +99,6 @@ export interface AppData {
   reports: Record<string, ClassReport>;
   lessons: Lesson[];
   calls: CallRecord[];
+  attendanceSheets: AttendanceSheet[];
+  attendanceMarks: AttendanceMark[];
 }

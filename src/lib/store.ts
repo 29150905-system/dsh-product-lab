@@ -1,6 +1,8 @@
 import type {
   AppData,
   Assessment,
+  AttendanceMark,
+  AttendanceSheet,
   CallRecord,
   CallResult,
   GeneratedProfile,
@@ -31,6 +33,8 @@ export function emptyData(): AppData {
     reports: {},
     lessons: [],
     calls: [],
+    attendanceSheets: [],
+    attendanceMarks: [],
   };
 }
 
@@ -73,6 +77,11 @@ export function seedData(): AppData {
     createdAt: now + index * 60_000,
   }));
 
+  const sheetId = "att_demo_1";
+  const attendanceMarks: AttendanceMark[] = [
+    { sheetId, studentId: students[7].id, absent: true, updatedAt: now },
+  ];
+
   return {
     version: 1,
     classes: [
@@ -111,6 +120,17 @@ export function seedData(): AppData {
       },
     ],
     calls,
+    attendanceSheets: [
+      {
+        id: sheetId,
+        classId,
+        date: "2026-10-21",
+        period: "第 3 节",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    attendanceMarks,
   };
 }
 
@@ -147,6 +167,8 @@ export function loadData(): AppData {
       reports: parsed.reports ?? {},
       lessons: parsed.lessons ?? [],
       calls: parsed.calls ?? [],
+      attendanceSheets: parsed.attendanceSheets ?? [],
+      attendanceMarks: parsed.attendanceMarks ?? [],
     };
   } catch {
     const seeded = seedData();
@@ -397,6 +419,37 @@ export function pickStudent(
 
   const index = Math.min(candidates.length - 1, Math.floor(random() * candidates.length));
   return candidates[Math.max(0, index)] ?? null;
+}
+
+export function classAttendanceSheets(data: AppData, classId: string): AttendanceSheet[] {
+  return data.attendanceSheets
+    .filter((sheet) => sheet.classId === classId)
+    .sort((a, b) => {
+      if (a.date === b.date) return b.createdAt - a.createdAt;
+      return a.date < b.date ? 1 : -1;
+    });
+}
+
+/** 返回缺勤学生 id 集合 */
+export function sheetAbsentIds(data: AppData, sheetId: string): Set<string> {
+  return new Set(
+    data.attendanceMarks
+      .filter((mark) => mark.sheetId === sheetId && mark.absent)
+      .map((mark) => mark.studentId),
+  );
+}
+
+export interface SheetCounts {
+  total: number;
+  absent: number;
+  present: number;
+}
+
+export function sheetCounts(data: AppData, sheetId: string, studentIds: string[]): SheetCounts {
+  const absentIds = sheetAbsentIds(data, sheetId);
+  const total = studentIds.length;
+  const absent = studentIds.filter((studentId) => absentIds.has(studentId)).length;
+  return { total, absent, present: total - absent };
 }
 
 export interface OverviewStats {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   AppData,
   Assessment,
+  AttendanceSheet,
   CallResult,
   ClassReport,
   GeneratedProfile,
@@ -200,6 +201,84 @@ export function useAppStore() {
     [mutate],
   );
 
+  const addSheet = useCallback(
+    (input: { classId: string; date: string; period: string; note?: string }): string => {
+      const id = uid("att");
+      const now = Date.now();
+      const sheet: AttendanceSheet = {
+        id,
+        classId: input.classId,
+        date: input.date,
+        period: input.period,
+        note: input.note?.trim() || undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      mutate((current) => ({
+        ...current,
+        attendanceSheets: [...current.attendanceSheets, sheet],
+      }));
+      return id;
+    },
+    [mutate],
+  );
+
+  const updateSheet = useCallback(
+    (sheetId: string, patch: Partial<Pick<AttendanceSheet, "date" | "period" | "note">>) => {
+      mutate((current) => ({
+        ...current,
+        attendanceSheets: current.attendanceSheets.map((sheet) =>
+          sheet.id === sheetId
+            ? {
+                ...sheet,
+                ...patch,
+                note: patch.note === undefined ? sheet.note : patch.note.trim() || undefined,
+                updatedAt: Date.now(),
+              }
+            : sheet,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
+  const toggleAbsent = useCallback(
+    (sheetId: string, studentId: string) => {
+      const now = Date.now();
+      mutate((current) => {
+        const existing = current.attendanceMarks.find(
+          (mark) => mark.sheetId === sheetId && mark.studentId === studentId,
+        );
+        if (existing) {
+          return {
+            ...current,
+            attendanceMarks: current.attendanceMarks.filter(
+              (mark) => !(mark.sheetId === sheetId && mark.studentId === studentId),
+            ),
+          };
+        }
+        return {
+          ...current,
+          attendanceMarks: [
+            ...current.attendanceMarks,
+            { sheetId, studentId, absent: true, updatedAt: now },
+          ],
+        };
+      });
+    },
+    [mutate],
+  );
+
+  const setAllPresent = useCallback(
+    (sheetId: string) => {
+      mutate((current) => ({
+        ...current,
+        attendanceMarks: current.attendanceMarks.filter((mark) => mark.sheetId !== sheetId),
+      }));
+    },
+    [mutate],
+  );
+
   return {
     data,
     addClass,
@@ -211,5 +290,9 @@ export function useAppStore() {
     updateLesson,
     addCall,
     deleteCall,
+    addSheet,
+    updateSheet,
+    toggleAbsent,
+    setAllPresent,
   };
 }
