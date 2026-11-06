@@ -89,6 +89,19 @@ export interface AttendanceMark {
   updatedAt: number;
 }
 
+/** 一张卷面：拍照图片（IndexedDB）+ OCR 文字，作为卷面分析的输入 */
+export interface PaperScan {
+  id: string;
+  assessmentId: string;
+  studentId?: string;
+  title: string;
+  ocrText: string;
+  imageKey: string;
+  confidence: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AppData {
   version: 1;
   updatedAt?: number;
@@ -102,4 +115,5 @@ export interface AppData {
   calls: CallRecord[];
   attendanceSheets: AttendanceSheet[];
   attendanceMarks: AttendanceMark[];
+  papers: PaperScan[];
 }

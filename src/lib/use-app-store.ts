@@ -9,9 +9,11 @@ import type {
   ClassReport,
   GeneratedProfile,
   Lesson,
+  PaperScan,
   Stage,
 } from "./types";
 import { createStudents, emptyData, loadData, profileKey, reportKey, saveData, uid } from "./store";
+import { deleteImage } from "./media-store";
 import {
   decryptData,
   encryptData,
@@ -361,6 +363,71 @@ export function useAppStore() {
     [mutate],
   );
 
+  const addPaper = useCallback(
+    (input: {
+      assessmentId: string;
+      title: string;
+      ocrText: string;
+      imageKey: string;
+      confidence: number;
+      studentId?: string;
+    }): string => {
+      const id = uid("paper");
+      const now = Date.now();
+      mutate((current) => ({
+        ...current,
+        papers: [
+          ...current.papers,
+          {
+            id,
+            assessmentId: input.assessmentId,
+            studentId: input.studentId,
+            title: input.title.trim() || "未命名卷面",
+            ocrText: input.ocrText,
+            imageKey: input.imageKey,
+            confidence: input.confidence,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      }));
+      return id;
+    },
+    [mutate],
+  );
+
+  const updatePaper = useCallback(
+    (paperId: string, patch: Partial<Pick<PaperScan, "title" | "ocrText" | "studentId">>) => {
+      mutate((current) => ({
+        ...current,
+        papers: current.papers.map((paper) =>
+          paper.id === paperId
+            ? {
+                ...paper,
+                ...patch,
+                title:
+                  patch.title === undefined ? paper.title : patch.title.trim() || "未命名卷面",
+                updatedAt: Date.now(),
+              }
+            : paper,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
+  const deletePaper = useCallback(
+    (paperId: string) => {
+      const target = data?.papers.find((paper) => paper.id === paperId);
+      if (target?.imageKey) void deleteImage(target.imageKey);
+      mutate((current) => ({
+        ...current,
+        papers: current.papers.filter((paper) => paper.id !== paperId),
+      }));
+    },
+    [data, mutate],
+  );
+
   return {
     data,
     addClass,
@@ -376,5 +443,8 @@ export function useAppStore() {
     updateSheet,
     toggleAbsent,
     setAllPresent,
+    addPaper,
+    updatePaper,
+    deletePaper,
   };
 }

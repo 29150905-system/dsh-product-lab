@@ -309,6 +309,17 @@ function AssessmentContent() {
         </p>
       </header>
 
+      <Link
+        href={`/app/classes/${classId}/assessments/${assessmentId}/papers`}
+        className="mt-4 flex items-center justify-between rounded-3xl border border-zinc-200 bg-white px-4 py-3 shadow-sm"
+      >
+        <span>
+          <span className="text-sm font-medium">卷面 OCR</span>
+          <span className="ml-2 text-xs text-zinc-400">拍照识别试卷，为卷面分析做准备</span>
+        </span>
+        <span className="text-zinc-400">→</span>
+      </Link>
+
       <div className="mt-5 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
         <p className="text-xs leading-5 text-zinc-500">
           用匿名化的成绩数据生成学情档案和家长话术，姓名不会发送给模型。

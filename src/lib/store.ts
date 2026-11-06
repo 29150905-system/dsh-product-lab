@@ -8,6 +8,7 @@ import type {
   GeneratedProfile,
   Klass,
   Lesson,
+  PaperScan,
   Score,
   Stage,
   Student,
@@ -36,6 +37,7 @@ export function emptyData(): AppData {
     calls: [],
     attendanceSheets: [],
     attendanceMarks: [],
+    papers: [],
   };
 }
 
@@ -133,6 +135,7 @@ export function seedData(): AppData {
       },
     ],
     attendanceMarks,
+    papers: [],
   };
 }
 
@@ -172,6 +175,7 @@ export function loadData(): AppData {
       calls: parsed.calls ?? [],
       attendanceSheets: parsed.attendanceSheets ?? [],
       attendanceMarks: parsed.attendanceMarks ?? [],
+      papers: parsed.papers ?? [],
     };
   } catch {
     const seeded = seedData();
@@ -422,6 +426,12 @@ export function pickStudent(
 
   const index = Math.min(candidates.length - 1, Math.floor(random() * candidates.length));
   return candidates[Math.max(0, index)] ?? null;
+}
+
+export function assessmentPapers(data: AppData, assessmentId: string): PaperScan[] {
+  return data.papers
+    .filter((paper) => paper.assessmentId === assessmentId)
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function classAttendanceSheets(data: AppData, classId: string): AttendanceSheet[] {
