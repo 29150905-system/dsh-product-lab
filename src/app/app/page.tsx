@@ -163,7 +163,7 @@ export default function AppHomePage() {
       )}
 
       <p className="mt-8 text-center text-[11px] leading-5 text-zinc-400">
-        学生数据只存在这台设备上
+        数据默认只存本机；可在「数据同步」里开启加密同步
         <br />
         生成内容前会自动匿名化姓名
       </p>

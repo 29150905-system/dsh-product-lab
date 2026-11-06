@@ -108,12 +108,14 @@ function ClassDetailContent() {
         ) : (
           <p className="text-sm text-zinc-500">还没有考试记录，先录一次成绩吧。</p>
         )}
-        <Link
-          href={`/app/classes/${classId}/assessments/${latest.id}`}
-          className="mt-4 block rounded-xl bg-zinc-900 py-2.5 text-center text-sm font-medium text-white"
-        >
-          查看本次学情
-        </Link>
+        {latest ? (
+          <Link
+            href={`/app/classes/${classId}/assessments/${latest.id}`}
+            className="mt-4 block rounded-xl bg-zinc-900 py-2.5 text-center text-sm font-medium text-white"
+          >
+            查看本次学情
+          </Link>
+        ) : null}
         <Link
           href={`/app/classes/${classId}/exam/new`}
           className="mt-2 block rounded-xl border border-zinc-200 py-2.5 text-center text-sm font-medium text-zinc-700"
@@ -202,14 +204,6 @@ function ClassDetailContent() {
           )}
         </div>
       </section>
-
-      <button
-        type="button"
-        disabled
-        className="mt-6 w-full rounded-2xl border border-zinc-200 bg-white/70 py-3 text-sm text-zinc-400"
-      >
-        生成学情档案（W3 接入）
-      </button>
 
       <p className="mt-6 text-center text-[11px] leading-5 text-zinc-400">
         数据只存在这台设备上 · 生成前自动匿名化姓名
