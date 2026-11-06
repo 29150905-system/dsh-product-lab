@@ -49,8 +49,10 @@
 
 ## 端策略（手机优先）
 
+- **线上地址**：**https://jingmingzhice.com**（2026-11-06 起；旧 `dsh-product-lab.vercel.app` 在国内被 DNS 污染，已弃用）
 - **主端：手机** —— 先做 PWA（Chrome「添加到主屏幕」，全屏像 App），W6–W7 用 Capacitor 打包 Android APK
-- **Android debug APK v0.1.0**：GitHub Release `android-v0.1.0`（Capacitor 套壳，加载线上站点，约 4 MB，仅供侧载测试）
+- **Android debug APK v0.1.0**：GitHub Release `android-v0.1.0`（Capacitor 套壳，加载线上站点，约 4 MB，仅供侧载测试）；线上直链 `https://jingmingzhice.com/downloads/jingming-teacher.apk`
+- ⚠️ 现有两个 APK 内嵌的是旧域名 `dsh-product-lab.vercel.app`（国内打不开），需在 W6–W7 重打包；`mobile/capacitor.config.json` 已改成新域名
 - **辅助端：Windows** —— Edge「安装此站点为应用」；后期用 Electron/Tauri 出安装包
 - **一套代码**：Next.js Web + PWA；原生壳只是外壳，不重写 UI/逻辑
 - 手机端交互原则：单手可操作、列表卡片化、主操作固定在底部
@@ -74,6 +76,7 @@
 - [ ] 考试成绩录入（手动 + 粘贴，v1 只录总分）
 - [ ] 学情档案生成（LLM，按学生逐个）
 - [ ] 家长沟通话术生成（可编辑）
+- [ ] **班级总体学情：整体判断 + 教学节奏建议（加快 / 维持 / 减缓）+ 查漏补缺与分层动作**
 - [ ] 复制 / 导出（Markdown / 文本）
 - [ ] 本地持久化（localStorage / IndexedDB）
 - [ ] 首次使用示例数据（假数据，方便体验）
@@ -98,6 +101,7 @@ Assessment { id, classId, name, date, subject?, fullScore }
 Score      { assessmentId, studentId, value }
 Profile    { studentId, assessmentId, text, createdAt }
 Message    { studentId, assessmentId, text, editedAt }
+Report     { assessmentId, headline, pace: '加快'|'维持'|'减缓', diagnosis, actions[], updatedAt }
 ```
 
 v1 全部存本地；导出 JSON 备份。
@@ -118,6 +122,7 @@ v1 全部存本地；导出 JSON 备份。
 
 - 老师从「拿到成绩」到「发完 N 个家长」的时间：**2 小时 → 20 分钟以内**
 - 生成的学情档案，老师**愿意直接改 3 处以内**就发出去
+- 老师看完「班级总体学情」，能一句话说出**这周先补什么 / 要不要赶进度**
 - 找 3–5 位高中班主任试用，至少 3 位说「下次还会用」
 
 ---
@@ -153,6 +158,7 @@ v1 全部存本地；导出 JSON 备份。
 - ✅ W2：班级 / 学生 / 成绩录入（本地存储 + 示例数据 + 移动端界面）
 - ✅ W3：接入 LLM 生成学情档案（本地 + 线上验证通过）
 - ✅ W4（功能）：批量生成、话术可编辑、一键复制全部、每日限额（50 次/天 + 接口限流）
+- ✅ W4.5（2026-11-06）：班级总体学情——汇总平均/中位数/及格率/优秀率/分数段分布 + 与上次对比，LLM 给出「加快 / 维持 / 减缓」的节奏建议和查漏补缺、分层动作；本地保存、可复制
 - ⏳ W4（验证）：找 1–3 位高中班主任真实试用
 
 ---

@@ -3,7 +3,7 @@
   "appName": "景明",
   "webDir": "www",
   "server": {
-    "url": "https://dsh-product-lab.vercel.app",
+    "url": "https://jingmingzhice.com",
     "cleartext": false
   },
   "android": {

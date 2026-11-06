@@ -36,6 +36,17 @@ export interface GeneratedProfile {
   updatedAt: number;
 }
 
+/** 教学节奏建议：加快 / 维持 / 减缓 */
+export type ClassPace = "加快" | "维持" | "减缓";
+
+export interface ClassReport {
+  headline: string;
+  pace: ClassPace;
+  diagnosis: string;
+  actions: string[];
+  updatedAt: number;
+}
+
 export interface AppData {
   version: 1;
   classes: Klass[];
@@ -43,4 +54,5 @@ export interface AppData {
   assessments: Assessment[];
   scores: Score[];
   profiles: Record<string, GeneratedProfile>;
+  reports: Record<string, ClassReport>;
 }

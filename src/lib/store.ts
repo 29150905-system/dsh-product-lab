@@ -25,6 +25,7 @@ export function emptyData(): AppData {
     assessments: [],
     scores: [],
     profiles: {},
+    reports: {},
   };
 }
 
@@ -81,6 +82,7 @@ export function seedData(): AppData {
     ],
     scores,
     profiles: {},
+    reports: {},
   };
 }
 
@@ -111,7 +113,11 @@ export function loadData(): AppData {
       saveData(seeded);
       return seeded;
     }
-    return { ...parsed, profiles: parsed.profiles ?? {} };
+    return {
+      ...parsed,
+      profiles: parsed.profiles ?? {},
+      reports: parsed.reports ?? {},
+    };
   } catch {
     const seeded = seedData();
     saveData(seeded);
@@ -228,6 +234,110 @@ export function average(values: number[]): number {
 
 export function profileKey(assessmentId: string, studentId: string): string {
   return `${assessmentId}:${studentId}`;
+}
+
+export function reportKey(assessmentId: string): string {
+  return assessmentId;
+}
+
+export interface OverviewStats {
+  examName: string;
+  fullScore: number;
+  count: number;
+  average: number;
+  median: number;
+  max: number;
+  min: number;
+  passRate: number;
+  excellentRate: number;
+  lowRate: number;
+  distribution: { label: string; count: number; ratio: number }[];
+  previousAverage: number | null;
+  previousExamName: string | null;
+  trend: number | null;
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/** 班级整体学情用的统计（不含姓名，可安全发给模型） */
+export function overviewStats(
+  data: AppData,
+  classId: string,
+  assessmentId: string,
+): OverviewStats | null {
+  const exam = data.assessments.find((item) => item.id === assessmentId);
+  if (!exam) return null;
+  const full = exam.fullScore > 0 ? exam.fullScore : 100;
+  const students = classStudents(data, classId);
+  const scores = latestScores(data, assessmentId);
+  const values = students
+    .map((student) => scores[student.id])
+    .filter((value): value is number => Number.isFinite(value))
+    .sort((a, b) => a - b);
+
+  const count = values.length;
+  const sum = values.reduce((acc, value) => acc + value, 0);
+  const avg = count > 0 ? round1(sum / count) : 0;
+  const median =
+    count === 0
+      ? 0
+      : count % 2 === 1
+        ? values[(count - 1) / 2]
+        : round1((values[count / 2 - 1] + values[count / 2]) / 2);
+
+  const buckets: { label: string; min: number; max: number }[] = [
+    { label: "90% 及以上", min: 0.9, max: Infinity },
+    { label: "80%–90%", min: 0.8, max: 0.9 },
+    { label: "70%–80%", min: 0.7, max: 0.8 },
+    { label: "60%–70%", min: 0.6, max: 0.7 },
+    { label: "60% 以下", min: 0, max: 0.6 },
+  ];
+  const distribution = buckets.map((bucket) => {
+    const bucketCount = values.filter((value) => {
+      const ratio = value / full;
+      return ratio >= bucket.min && ratio < bucket.max;
+    }).length;
+    return {
+      label: bucket.label,
+      count: bucketCount,
+      ratio: count === 0 ? 0 : Math.round((bucketCount / count) * 100),
+    };
+  });
+
+  const rate = (predicate: (value: number) => boolean): number =>
+    count === 0 ? 0 : Math.round((values.filter(predicate).length / count) * 100);
+
+  const ordered = classAssessments(data, classId).slice().sort((a, b) => a.createdAt - b.createdAt);
+  const index = ordered.findIndex((item) => item.id === assessmentId);
+  const previous = index > 0 ? ordered[index - 1] : null;
+  let previousAverage: number | null = null;
+  if (previous) {
+    const prevScores = latestScores(data, previous.id);
+    const prevValues = students
+      .map((student) => prevScores[student.id])
+      .filter((value): value is number => Number.isFinite(value));
+    if (prevValues.length > 0) previousAverage = average(prevValues);
+  }
+
+  return {
+    examName: exam.name,
+    fullScore: full,
+    count,
+    average: avg,
+    median,
+    max: count > 0 ? values[count - 1] : 0,
+    min: count > 0 ? values[0] : 0,
+    passRate: rate((value) => value >= full * 0.6),
+    excellentRate: rate((value) => value >= full * 0.85),
+    lowRate: rate((value) => value < full * 0.4),
+    distribution,
+    previousAverage,
+    previousExamName: previous?.name ?? null,
+    trend:
+      previousAverage === null ? null : round1(avg - previousAverage),
+  };
 }
 
 export function todayISO(): string {

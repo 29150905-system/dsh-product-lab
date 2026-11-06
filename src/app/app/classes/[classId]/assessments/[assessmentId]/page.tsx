@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useAppStore } from "@/lib/use-app-store";
-import { average, classStudents, latestScores, profileKey } from "@/lib/store";
+import { average, classStudents, latestScores, overviewStats, profileKey, reportKey } from "@/lib/store";
 import { DAILY_LIMIT, consumeGeneration, remainingGenerations } from "@/lib/usage";
 import type { Student } from "@/lib/types";
 
@@ -22,7 +22,7 @@ function AssessmentContent() {
   const params = useParams<{ classId: string; assessmentId: string }>();
   const classId = params?.classId ?? "";
   const assessmentId = params?.assessmentId ?? "";
-  const { data, saveProfile } = useAppStore();
+  const { data, saveProfile, saveReport } = useAppStore();
 
   const [open, setOpen] = useState<Student | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,6 +36,9 @@ function AssessmentContent() {
     total: 0,
     failed: 0,
   });
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [overviewCopied, setOverviewCopied] = useState(false);
 
   const currentProfile =
     data && open ? data.profiles[profileKey(assessmentId, open.id)] : undefined;
@@ -79,6 +82,8 @@ function AssessmentContent() {
       scores[student.id] !== undefined &&
       !store.profiles[profileKey(assessmentId, student.id)],
   ).length;
+  const stats = overviewStats(store, classId, assessmentId);
+  const report = store.reports[reportKey(assessmentId)];
 
   async function requestProfile(student: Student): Promise<GenerateResult> {
     const score = scores[student.id];
@@ -216,6 +221,82 @@ function AssessmentContent() {
     await copyText(entries.join("\n\n---\n\n"), "all");
   }
 
+  async function generateOverview() {
+    if (!stats || overviewLoading) return;
+    if (stats.count === 0) {
+      setOverviewError("还没有录入成绩，先录一次成绩再生成。");
+      return;
+    }
+    if (!consumeGeneration(1)) {
+      setRemaining(remainingGenerations());
+      setOverviewError(`今日生成次数已用完（每天 ${DAILY_LIMIT} 次），明天再试。`);
+      return;
+    }
+    setRemaining(remainingGenerations());
+    setOverviewLoading(true);
+    setOverviewError(null);
+    setOverviewCopied(false);
+    try {
+      const response = await fetch("/api/overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examName: exam.name,
+          fullScore: stats.fullScore,
+          studentCount: students.length,
+          average: stats.average,
+          median: stats.median,
+          max: stats.max,
+          min: stats.min,
+          passRate: stats.passRate,
+          excellentRate: stats.excellentRate,
+          lowRate: stats.lowRate,
+          distribution: stats.distribution,
+          previousAverage: stats.previousAverage,
+          previousExamName: stats.previousExamName,
+        }),
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        report?: {
+          headline: string;
+          pace: "加快" | "维持" | "减缓";
+          diagnosis: string;
+          actions: string[];
+        };
+        message?: string;
+      };
+      if (!response.ok || !result.ok || !result.report) {
+        setOverviewError(result.message ?? `生成失败（HTTP ${response.status}）`);
+        return;
+      }
+      saveReport(assessmentId, result.report);
+    } catch {
+      setOverviewError("网络异常，请检查网络后重试。");
+    } finally {
+      setOverviewLoading(false);
+    }
+  }
+
+  async function copyOverview() {
+    if (!report) return;
+    const text = [
+      `【${exam.name} · 班级总体学情】`,
+      report.headline,
+      `教学节奏建议：${report.pace}`,
+      report.diagnosis,
+      "行动建议：",
+      ...report.actions.map((item, index) => `${index + 1}. ${item}`),
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setOverviewCopied(true);
+      setTimeout(() => setOverviewCopied(false), 2000);
+    } catch {
+      setOverviewError("复制失败，请手动选中复制。");
+    }
+  }
+
   return (
     <div className="px-5 pt-8">
       <header>
@@ -270,6 +351,105 @@ function AssessmentContent() {
           </p>
         ) : null}
       </div>
+
+      <section className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">班级总体学情</h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">
+              先看整体该加快还是补漏，再决定这一周的课堂节奏
+            </p>
+          </div>
+          {report ? (
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${paceTone(report.pace)}`}
+            >
+              {report.pace}进度
+            </span>
+          ) : null}
+        </div>
+
+        {stats ? (
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            {[
+              { label: "平均", value: stats.average },
+              { label: "中位数", value: stats.median },
+              { label: "最高", value: stats.max },
+              { label: "最低", value: stats.min },
+              { label: "及格率", value: `${stats.passRate}%` },
+              { label: "优秀率", value: `${stats.excellentRate}%` },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl bg-zinc-50 px-2 py-2.5">
+                <p className="text-[11px] text-zinc-400">{item.label}</p>
+                <p className="mt-0.5 text-sm font-semibold text-zinc-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {stats && stats.trend !== null ? (
+          <p
+            className={`mt-3 text-xs ${stats.trend >= 0 ? "text-emerald-700" : "text-amber-700"}`}
+          >
+            比上次{stats.previousExamName ? `（${stats.previousExamName}）` : ""}
+            {stats.trend >= 0 ? "高" : "低"} {Math.abs(stats.trend)} 分
+          </p>
+        ) : null}
+
+        {report ? (
+          <div className="mt-4 rounded-2xl bg-zinc-50 p-4">
+            <p className="text-sm font-semibold leading-6 text-zinc-900">
+              {report.headline}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">{report.diagnosis}</p>
+            <ul className="mt-3 space-y-1.5">
+              {report.actions.map((action, index) => (
+                <li
+                  key={index}
+                  className="flex gap-2 text-sm leading-6 text-zinc-700"
+                >
+                  <span className="mt-0.5 shrink-0 text-[11px] text-zinc-400">
+                    {index + 1}.
+                  </span>
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={copyOverview}
+              className="mt-3 w-full rounded-xl border border-zinc-200 bg-white py-2 text-xs font-medium text-zinc-700"
+            >
+              {overviewCopied ? "已复制总体学情 ✓" : "复制总体学情"}
+            </button>
+          </div>
+        ) : null}
+
+        {overviewError ? (
+          <p className="mt-3 rounded-2xl bg-red-50 p-3 text-xs leading-5 text-red-700">
+            {overviewError}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={generateOverview}
+          disabled={overviewLoading || !stats || stats.count === 0 || remaining === 0}
+          className="mt-4 w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+        >
+          {overviewLoading
+            ? "正在分析班级整体…"
+            : report
+              ? "重新生成总体学情"
+              : "生成总体学情"}
+        </button>
+
+        <p className="mt-2 text-center text-[11px] text-zinc-400">
+          {report
+            ? `生成于 ${new Date(report.updatedAt).toLocaleString("zh-CN", { hour12: false })}`
+            : "只发送汇总数据，不发送任何学生姓名"}
+        </p>
+      </section>
 
       <section className="mt-6">
         <div className="flex items-center justify-between">
@@ -442,6 +622,12 @@ function AssessmentContent() {
       ) : null}
     </div>
   );
+}
+
+function paceTone(pace: "加快" | "维持" | "减缓"): string {
+  if (pace === "加快") return "bg-amber-50 text-amber-700";
+  if (pace === "减缓") return "bg-sky-50 text-sky-700";
+  return "bg-emerald-50 text-emerald-700";
 }
 
 function PageSkeleton() {

@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.vercel
+.vercelignore
+.env.local
+.env*.local
+mobile
+*.apk
+*.zip
+tsconfig.tsbuildinfo

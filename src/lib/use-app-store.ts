@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AppData, Assessment, GeneratedProfile, Stage } from "./types";
-import { createStudents, emptyData, loadData, profileKey, saveData, uid } from "./store";
+import type { AppData, Assessment, ClassReport, GeneratedProfile, Stage } from "./types";
+import { createStudents, emptyData, loadData, profileKey, reportKey, saveData, uid } from "./store";
 
 export interface NewAssessmentInput {
   classId: string;
@@ -103,5 +103,19 @@ export function useAppStore() {
     [mutate],
   );
 
-  return { data, addClass, addStudents, addAssessment, saveProfile };
+  const saveReport = useCallback(
+    (assessmentId: string, input: Omit<ClassReport, "updatedAt">) => {
+      const key = reportKey(assessmentId);
+      mutate((current) => ({
+        ...current,
+        reports: {
+          ...current.reports,
+          [key]: { ...input, updatedAt: Date.now() },
+        },
+      }));
+    },
+    [mutate],
+  );
+
+  return { data, addClass, addStudents, addAssessment, saveProfile, saveReport };
 }
