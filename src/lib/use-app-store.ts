@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   AppData,
   Assessment,
-  AttendanceStatus,
+  CallResult,
   ClassReport,
   GeneratedProfile,
   Lesson,
@@ -132,7 +132,6 @@ export function useAppStore() {
       period: string;
       subject?: string;
       note?: string;
-      studentIds: string[];
     }): string => {
       const id = uid("lsn");
       const now = Date.now();
@@ -149,15 +148,6 @@ export function useAppStore() {
       mutate((current) => ({
         ...current,
         lessons: [...current.lessons, lesson],
-        attendance: [
-          ...current.attendance,
-          ...input.studentIds.map((studentId) => ({
-            lessonId: id,
-            studentId,
-            status: "present" as AttendanceStatus,
-            updatedAt: now,
-          })),
-        ],
       }));
       return id;
     },
@@ -187,48 +177,25 @@ export function useAppStore() {
     [mutate],
   );
 
-  const setAttendance = useCallback(
-    (lessonId: string, studentId: string, status: AttendanceStatus) => {
+  const addCall = useCallback(
+    (lessonId: string, studentId: string, result: CallResult): string => {
+      const id = uid("call");
       const now = Date.now();
-      mutate((current) => {
-        const exists = current.attendance.some(
-          (record) => record.lessonId === lessonId && record.studentId === studentId,
-        );
-        return {
-          ...current,
-          attendance: exists
-            ? current.attendance.map((record) =>
-                record.lessonId === lessonId && record.studentId === studentId
-                  ? { ...record, status, updatedAt: now }
-                  : record,
-              )
-            : [...current.attendance, { lessonId, studentId, status, updatedAt: now }],
-        };
-      });
+      mutate((current) => ({
+        ...current,
+        calls: [...current.calls, { id, lessonId, studentId, result, createdAt: now }],
+      }));
+      return id;
     },
     [mutate],
   );
 
-  const setAllAttendance = useCallback(
-    (lessonId: string, studentIds: string[], status: AttendanceStatus) => {
-      const now = Date.now();
-      const idSet = new Set(studentIds);
-      mutate((current) => {
-        const covered = new Set(
-          current.attendance
-            .filter((record) => record.lessonId === lessonId && idSet.has(record.studentId))
-            .map((record) => record.studentId),
-        );
-        const updated = current.attendance.map((record) =>
-          record.lessonId === lessonId && idSet.has(record.studentId)
-            ? { ...record, status, updatedAt: now }
-            : record,
-        );
-        const added = studentIds
-          .filter((studentId) => !covered.has(studentId))
-          .map((studentId) => ({ lessonId, studentId, status, updatedAt: now }));
-        return { ...current, attendance: [...updated, ...added] };
-      });
+  const deleteCall = useCallback(
+    (callId: string) => {
+      mutate((current) => ({
+        ...current,
+        calls: current.calls.filter((call) => call.id !== callId),
+      }));
     },
     [mutate],
   );
@@ -242,7 +209,7 @@ export function useAppStore() {
     saveReport,
     addLesson,
     updateLesson,
-    setAttendance,
-    setAllAttendance,
+    addCall,
+    deleteCall,
   };
 }

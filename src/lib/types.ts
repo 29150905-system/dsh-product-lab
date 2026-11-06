@@ -47,8 +47,8 @@ export interface ClassReport {
   updatedAt: number;
 }
 
-/** 点名状态：到 / 迟到 / 请假 / 缺勤 */
-export type AttendanceStatus = "present" | "late" | "leave" | "absent";
+/** 一次提问点名的回答结果：答得好 / 一般 / 没答上来 */
+export type CallResult = "good" | "ok" | "poor";
 
 export interface Lesson {
   id: string;
@@ -61,11 +61,13 @@ export interface Lesson {
   updatedAt: number;
 }
 
-export interface Attendance {
+/** 一次课堂提问点名记录（谁、被点后答得怎么样、什么时候） */
+export interface CallRecord {
+  id: string;
   lessonId: string;
   studentId: string;
-  status: AttendanceStatus;
-  updatedAt: number;
+  result: CallResult;
+  createdAt: number;
 }
 
 export interface AppData {
@@ -77,5 +79,5 @@ export interface AppData {
   profiles: Record<string, GeneratedProfile>;
   reports: Record<string, ClassReport>;
   lessons: Lesson[];
-  attendance: Attendance[];
+  calls: CallRecord[];
 }

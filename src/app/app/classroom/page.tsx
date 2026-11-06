@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAppStore } from "@/lib/use-app-store";
 import {
-  attendanceCounts,
   classLessons,
   classStudents,
   defaultPeriodLabel,
+  lessonCallStats,
   todayISO,
 } from "@/lib/store";
 
@@ -35,7 +35,7 @@ export default function ClassroomPage() {
         <p className="text-xs text-zinc-400">景明 · 教师工作台</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">课堂</h1>
         <div className="mt-8 rounded-3xl border border-zinc-200 bg-white p-6 text-sm leading-6 text-zinc-500 shadow-sm">
-          还没有班级。先去「学情」里建一个班级，再回来点名。
+          还没有班级。先去「学情」里建一个班级，再回来点名提问。
         </div>
         <Link
           href="/app"
@@ -49,21 +49,25 @@ export default function ClassroomPage() {
 
   const students = classStudents(data, activeClass.id);
   const lessons = classLessons(data, activeClass.id);
-  const totalAbsent = lessons.reduce(
-    (acc, lesson) => acc + attendanceCounts(data, lesson.id, students.map((s) => s.id)).absent,
+  const studentIds = students.map((student) => student.id);
+  const totalCalls = lessons.reduce(
+    (acc, lesson) => acc + lessonCallStats(data, lesson.id, studentIds).calls,
     0,
   );
-  const totalLate = lessons.reduce(
-    (acc, lesson) => acc + attendanceCounts(data, lesson.id, students.map((s) => s.id)).late,
+  const lessonIds = new Set(lessons.map((lesson) => lesson.id));
+  const coveredAll = new Set(
+    data.calls.filter((call) => lessonIds.has(call.lessonId)).map((call) => call.studentId),
+  ).size;
+  const totalPoor = lessons.reduce(
+    (acc, lesson) => acc + lessonCallStats(data, lesson.id, studentIds).poor,
     0,
   );
 
-  function startRollCall() {
+  function startLesson() {
     const id = addLesson({
       classId: activeClass.id,
       date: todayISO(),
       period: defaultPeriodLabel(),
-      studentIds: students.map((student) => student.id),
     });
     router.push(`/app/classroom/${id}`);
   }
@@ -73,7 +77,7 @@ export default function ClassroomPage() {
       <header>
         <p className="text-xs text-zinc-400">景明 · 教师工作台</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">课堂</h1>
-        <p className="mt-1 text-sm text-zinc-500">点一次名，自动记一节课</p>
+        <p className="mt-1 text-sm text-zinc-500">随机点名，记下谁答得怎么样</p>
       </header>
 
       {data.classes.length > 1 ? (
@@ -100,7 +104,7 @@ export default function ClassroomPage() {
           <div>
             <h2 className="text-lg font-semibold">{activeClass.name}</h2>
             <p className="mt-1 text-xs text-zinc-400">
-              {students.length} 人 · 已点 {lessons.length} 次
+              {students.length} 人 · 已上 {lessons.length} 节课
             </p>
           </div>
           <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] text-zinc-500">
@@ -111,45 +115,49 @@ export default function ClassroomPage() {
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-2xl bg-zinc-50 px-2 py-2.5">
             <p className="text-[11px] text-zinc-400">累计点名</p>
-            <p className="mt-0.5 text-sm font-semibold text-zinc-800">{lessons.length} 次</p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-800">{totalCalls} 次</p>
           </div>
           <div className="rounded-2xl bg-zinc-50 px-2 py-2.5">
-            <p className="text-[11px] text-zinc-400">缺勤</p>
-            <p className="mt-0.5 text-sm font-semibold text-zinc-800">{totalAbsent} 人次</p>
+            <p className="text-[11px] text-zinc-400">覆盖学生</p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-800">
+              {coveredAll}/{students.length}
+            </p>
           </div>
           <div className="rounded-2xl bg-zinc-50 px-2 py-2.5">
-            <p className="text-[11px] text-zinc-400">迟到</p>
-            <p className="mt-0.5 text-sm font-semibold text-zinc-800">{totalLate} 人次</p>
+            <p className="text-[11px] text-zinc-400">没答上来</p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-800">{totalPoor} 次</p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={startRollCall}
+          onClick={startLesson}
           disabled={students.length === 0}
           className="mt-4 w-full rounded-2xl bg-zinc-900 py-3 text-sm font-medium text-white disabled:opacity-40"
         >
-          {students.length === 0 ? "先在学情里加学生" : `开始点名 · 今天 ${defaultPeriodLabel()}`}
+          {students.length === 0
+            ? "先在学情里加学生"
+            : "开始一节课 · 今天 " + defaultPeriodLabel()}
         </button>
         <p className="mt-2 text-center text-[11px] text-zinc-400">
-          默认全班到齐，只需要点异常的同学；每次改动自动保存
+          抽人优先没被点过的 · 谁答得怎么样全自动记录
         </p>
       </section>
 
       <section className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-500">课堂记录</h2>
-          <span className="text-xs text-zinc-400">共 {lessons.length} 次</span>
+          <span className="text-xs text-zinc-400">共 {lessons.length} 节</span>
         </div>
 
         {lessons.length === 0 ? (
           <div className="mt-3 rounded-3xl border border-dashed border-zinc-300 bg-white/60 p-6 text-center text-sm text-zinc-500">
-            还没有点名记录，点上面「开始点名」试试。
+            还没有课堂记录，点上面「开始一节课」试试。
           </div>
         ) : (
           <div className="mt-3 overflow-hidden rounded-3xl border border-zinc-200 bg-white">
             {lessons.map((lesson, index) => {
-              const counts = attendanceCounts(data, lesson.id, students.map((s) => s.id));
+              const stats = lessonCallStats(data, lesson.id, studentIds);
               return (
                 <Link
                   key={lesson.id}
@@ -164,19 +172,17 @@ export default function ClassroomPage() {
                       {lesson.subject ? ` · ${lesson.subject}` : ""}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-zinc-400">
-                      实到 {counts.signedIn} / {counts.total}
-                      {counts.leave > 0 ? ` · 请假 ${counts.leave}` : ""}
-                      {counts.late > 0 ? ` · 迟到 ${counts.late}` : ""}
+                      点名 {stats.calls} 次 · 覆盖 {stats.covered}/{stats.students}
                     </p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                      counts.absent > 0
-                        ? "bg-red-50 text-red-700"
-                        : "bg-emerald-50 text-emerald-700"
+                      stats.calls > 0
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-zinc-100 text-zinc-500"
                     }`}
                   >
-                    {counts.absent > 0 ? `缺勤 ${counts.absent}` : "全到"}
+                    {stats.calls > 0 ? `好 ${stats.good} · 差 ${stats.poor}` : "还没点名"}
                   </span>
                 </Link>
               );
@@ -186,7 +192,7 @@ export default function ClassroomPage() {
       </section>
 
       <p className="mt-6 text-center text-[11px] leading-5 text-zinc-400">
-        点名数据只存在本机 · 不会上传
+        点名记录只存在本机 · 不会上传
       </p>
     </div>
   );

@@ -1,8 +1,8 @@
 import type {
   AppData,
   Assessment,
-  Attendance,
-  AttendanceStatus,
+  CallRecord,
+  CallResult,
   GeneratedProfile,
   Klass,
   Lesson,
@@ -30,7 +30,7 @@ export function emptyData(): AppData {
     profiles: {},
     reports: {},
     lessons: [],
-    attendance: [],
+    calls: [],
   };
 }
 
@@ -64,23 +64,13 @@ export function seedData(): AppData {
   }));
 
   const lessonId = "lsn_demo_1";
-  const lessonStatuses: AttendanceStatus[] = [
-    "present",
-    "present",
-    "late",
-    "present",
-    "present",
-    "present",
-    "present",
-    "absent",
-    "present",
-    "present",
-  ];
-  const attendance: Attendance[] = students.map((student, index) => ({
+  const demoResults: CallResult[] = ["good", "ok", "good", "poor", "ok"];
+  const calls: CallRecord[] = demoResults.map((result, index) => ({
+    id: `call_demo_${index + 1}`,
     lessonId,
-    studentId: student.id,
-    status: lessonStatuses[index] ?? "present",
-    updatedAt: now,
+    studentId: students[index].id,
+    result,
+    createdAt: now + index * 60_000,
   }));
 
   return {
@@ -120,7 +110,7 @@ export function seedData(): AppData {
         updatedAt: now,
       },
     ],
-    attendance,
+    calls,
   };
 }
 
@@ -156,7 +146,7 @@ export function loadData(): AppData {
       profiles: parsed.profiles ?? {},
       reports: parsed.reports ?? {},
       lessons: parsed.lessons ?? [],
-      attendance: parsed.attendance ?? [],
+      calls: parsed.calls ?? [],
     };
   } catch {
     const seeded = seedData();
@@ -280,14 +270,19 @@ export function reportKey(assessmentId: string): string {
   return assessmentId;
 }
 
-/** 点名状态顺序：点一下按这个循环切换（到 → 缺勤 → 迟到 → 请假 → 到） */
-export const ATTENDANCE_CYCLE: AttendanceStatus[] = ["present", "absent", "late", "leave"];
+/** 回答结果顺序与文案 */
+export const CALL_ORDER: CallResult[] = ["good", "ok", "poor"];
 
-export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
-  present: "到",
-  late: "迟到",
-  leave: "请假",
-  absent: "缺勤",
+export const CALL_LABELS: Record<CallResult, string> = {
+  good: "答得好",
+  ok: "一般",
+  poor: "没答上来",
+};
+
+export const CALL_TONES: Record<CallResult, string> = {
+  good: "bg-emerald-50 text-emerald-700",
+  ok: "bg-amber-50 text-amber-700",
+  poor: "bg-red-50 text-red-700",
 };
 
 export function defaultPeriodLabel(now = new Date()): string {
@@ -301,7 +296,7 @@ export function defaultPeriodLabel(now = new Date()): string {
   else if (hour >= 14 && hour < 15) index = 6;
   else if (hour >= 15 && hour < 16) index = 7;
   else if (hour >= 16 && hour < 17) index = 8;
-  else index = hour < 8 ? 1 : 1;
+  else index = 1;
   return `第 ${index} 节`;
 }
 
@@ -314,73 +309,94 @@ export function classLessons(data: AppData, classId: string): Lesson[] {
     });
 }
 
-export function lessonAttendance(
-  data: AppData,
-  lessonId: string,
-): Record<string, AttendanceStatus> {
-  const map: Record<string, AttendanceStatus> = {};
-  for (const record of data.attendance) {
-    if (record.lessonId === lessonId) map[record.studentId] = record.status;
-  }
-  return map;
+export function lessonCalls(data: AppData, lessonId: string): CallRecord[] {
+  return data.calls
+    .filter((call) => call.lessonId === lessonId)
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export interface AttendanceCounts {
-  total: number;
-  present: number;
-  late: number;
-  leave: number;
-  absent: number;
-  /** 实到 = 到 + 迟到 */
-  signedIn: number;
+export interface LessonCallStats {
+  calls: number;
+  covered: number;
+  students: number;
+  good: number;
+  ok: number;
+  poor: number;
 }
 
-export function attendanceCounts(
+export function lessonCallStats(
   data: AppData,
   lessonId: string,
   studentIds: string[],
-): AttendanceCounts {
-  const map = lessonAttendance(data, lessonId);
-  const counts: AttendanceCounts = {
-    total: studentIds.length,
-    present: 0,
-    late: 0,
-    leave: 0,
-    absent: 0,
-    signedIn: 0,
+): LessonCallStats {
+  const calls = data.calls.filter((call) => call.lessonId === lessonId);
+  const covered = new Set(calls.map((call) => call.studentId)).size;
+  return {
+    calls: calls.length,
+    covered,
+    students: studentIds.length,
+    good: calls.filter((call) => call.result === "good").length,
+    ok: calls.filter((call) => call.result === "ok").length,
+    poor: calls.filter((call) => call.result === "poor").length,
   };
-  for (const studentId of studentIds) {
-    const status = map[studentId] ?? "present";
-    if (status === "present") counts.present += 1;
-    else if (status === "late") counts.late += 1;
-    else if (status === "leave") counts.leave += 1;
-    else counts.absent += 1;
-  }
-  counts.signedIn = counts.present + counts.late;
-  return counts;
 }
 
-export interface StudentAttendanceSummary {
-  lessons: number;
-  absent: number;
-  late: number;
-  leave: number;
+export interface StudentCallStats {
+  total: number;
+  good: number;
+  ok: number;
+  poor: number;
+  lastCalledAt: number | null;
 }
 
-export function studentAttendanceSummary(
+export function studentCallStats(data: AppData, studentId: string): StudentCallStats {
+  const calls = data.calls.filter((call) => call.studentId === studentId);
+  return {
+    total: calls.length,
+    good: calls.filter((call) => call.result === "good").length,
+    ok: calls.filter((call) => call.result === "ok").length,
+    poor: calls.filter((call) => call.result === "poor").length,
+    lastCalledAt: calls.length === 0 ? null : Math.max(...calls.map((call) => call.createdAt)),
+  };
+}
+
+/**
+ * 随机挑一个学生：
+ * 1) 优先本节课还没被点到过的；
+ * 2) 同等条件下，优先累计被点次数最少的；
+ * 3) 再同等，优先最久没被点到的；
+ * 4) 最后在这些候选里随机。
+ */
+export function pickStudent(
   data: AppData,
-  classId: string,
-  studentId: string,
-): StudentAttendanceSummary {
-  const lessons = classLessons(data, classId);
-  const summary: StudentAttendanceSummary = { lessons: lessons.length, absent: 0, late: 0, leave: 0 };
-  for (const lesson of lessons) {
-    const status = lessonAttendance(data, lesson.id)[studentId];
-    if (status === "absent") summary.absent += 1;
-    else if (status === "late") summary.late += 1;
-    else if (status === "leave") summary.leave += 1;
+  lessonId: string,
+  students: Student[],
+  random: () => number = Math.random,
+): Student | null {
+  if (students.length === 0) return null;
+  const calledThisLesson = new Set(
+    data.calls.filter((call) => call.lessonId === lessonId).map((call) => call.studentId),
+  );
+  let pool = students.filter((student) => !calledThisLesson.has(student.id));
+  if (pool.length === 0) pool = students;
+
+  const stats = new Map<string, StudentCallStats>();
+  for (const student of pool) stats.set(student.id, studentCallStats(data, student.id));
+
+  const minTotal = Math.min(...pool.map((student) => stats.get(student.id)!.total));
+  let candidates = pool.filter((student) => stats.get(student.id)!.total === minTotal);
+
+  if (candidates.length > 1) {
+    const oldest = Math.min(
+      ...candidates.map((student) => stats.get(student.id)!.lastCalledAt ?? 0),
+    );
+    candidates = candidates.filter(
+      (student) => (stats.get(student.id)!.lastCalledAt ?? 0) === oldest,
+    );
   }
-  return summary;
+
+  const index = Math.min(candidates.length - 1, Math.floor(random() * candidates.length));
+  return candidates[Math.max(0, index)] ?? null;
 }
 
 export interface OverviewStats {
