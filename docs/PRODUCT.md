@@ -80,7 +80,8 @@
 - [ ] **班级总体学情：整体判断 + 教学节奏建议（加快 / 维持 / 减缓）+ 查漏补缺与分层动作**
 - [ ] **课堂提问点名：随机抽人（优先没被点过的）、答得好/一般/没答上来一键记录、本节课点名流水与撤销、覆盖率与「还没点到」名单、自动保存**
 - [ ] **出勤表（独立入口）：默认全班出勤，点学生 = 缺勤、再点恢复；应到/实到/缺勤统计、缺勤名单、自动保存**
-- [ ] **卷面 OCR：拍照试卷 → 浏览器端识别文字（中文+英文）→ 校对保存 → 为卷面分析提供输入；图片存 IndexedDB，不上传**
+- [ ] **卷面 OCR：拍照试卷 → 浏览器端识别文字（中文+英文）→ 校对保存；图片存 IndexedDB**
+- [ ] **AI 卷面分析（DeepSeek 视觉）：开启后把单张卷面图发给 deepseek-flash，返回逐题对错/错因/知识点 + 薄弱点 + 教学建议，显示 tokens 与费用**
 - [ ] **数据同步（可选）：同步码 + 端到端加密，App 与浏览器共用一份数据；换设备输码恢复**
 - [ ] 复制 / 导出（Markdown / 文本）
 - [ ] 本地持久化（localStorage / IndexedDB）
@@ -109,7 +110,7 @@ Message    { studentId, assessmentId, text, editedAt }
 Report     { assessmentId, headline, pace: '加快'|'维持'|'减缓', diagnosis, actions[], updatedAt }
 Lesson     { id, classId, date, period, subject?, note?, createdAt, updatedAt }
 Call       { id, lessonId, studentId, result: 'good'|'ok'|'poor', createdAt }
-Paper      { id, assessmentId, studentId?, title, ocrText, imageKey, confidence, createdAt, updatedAt }   // 图片存 IndexedDB
+Paper      { id, assessmentId, studentId?, title, ocrText, imageKey, confidence, analysis?, createdAt, updatedAt }   // 图片存 IndexedDB
 Sheet      { id, classId, date, period, note?, createdAt, updatedAt }
 Mark       { sheetId, studentId, absent: true, updatedAt }   // 只存缺勤，默认全到
 ```
@@ -122,7 +123,7 @@ v1 全部存本地；导出 JSON 备份。
 
 - 学生数据默认**只存本地**，不上传服务器
 - 开启同步后：客户端先用同步码做 AES-GCM 加密再上传，**服务器只存密文**，无同步码无法解密
-- **点名、课堂记录、出勤表与卷面图片也只存本地**，不调用模型、不上传（OCR 在浏览器本地跑）
+- **点名、课堂记录、出勤表与卷面图片默认只存本地**；OCR 在浏览器本地跑；只有老师手动开启「AI 卷面分析」后，单张卷面图才会发给 DeepSeek
 - 调用模型前**姓名匿名化**（张三 → 学生 A），只发送成绩与匿名特征
 - 演示 / 公开作品集一律用**假数据**
 - 不生成公开排名，不做学生画像对外分享
@@ -174,6 +175,7 @@ v1 全部存本地；导出 JSON 备份。
 - ✅ W4（功能）：批量生成、话术可编辑、一键复制全部、每日限额（50 次/天 + 接口限流）
 - ✅ W4.5（2026-11-06）：班级总体学情——汇总平均/中位数/及格率/优秀率/分数段分布 + 与上次对比，LLM 给出「加快 / 维持 / 减缓」的节奏建议和查漏补缺、分层动作；本地保存、可复制
 - ✅ v1.6.1（2026-11-06）：数据同步接上 Vercel Redis（REDIS_URL），已用两台设备实测双向同步；顺带修了「新建班级没有考试时点进去报错」的 bug
+- ✅ v1.8（2026-11-06）：AI 卷面分析——视觉模型（deepseek-flash）读卷面，输出逐题对错/错因/知识点、薄弱点、教学建议；带隐私开关（默认关）、费用显示（实测 2446 tokens ≈ ¥0.0063/张）
 - ✅ v1.7（2026-11-06）：卷面 OCR——拍照/选图 → 压缩 → Tesseract.js 本地识别（chi_sim+eng，自动清理汉字间空格）→ 可编辑校对 → 自动估算题目数；图片存 IndexedDB，识别文字存本地；为卷面分析预留数据
 - ✅ v1.6（2026-11-06）：数据同步——同步码 + 端到端加密（PBKDF2+AES-GCM），App/浏览器共用一份数据；打开自动拉取较新版本、改动后 1.2 秒防抖上传；设置页可生成/输入/复制同步码、立即同步、关闭同步
 - ✅ v1.5（2026-11-06）：出勤表（独立 tab）——每班按日期/节次建表，默认全部出勤，点学生切换缺勤、再点恢复；应到/实到/缺勤统计 + 缺勤名单 + 自动保存；数据只存本地

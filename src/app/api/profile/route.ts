@@ -162,7 +162,8 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-flash",
+        thinking: { type: "disabled" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {

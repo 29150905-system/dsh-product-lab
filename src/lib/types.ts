@@ -89,6 +89,26 @@ export interface AttendanceMark {
   updatedAt: number;
 }
 
+/** 视觉模型对一张卷面的错因分析结果 */
+export interface PaperQuestion {
+  no: string;
+  type: string;
+  studentAnswer: string;
+  isCorrect: boolean | null;
+  errorReason: string;
+  knowledgePoint: string;
+}
+
+export interface PaperAnalysis {
+  summary: string;
+  questions: PaperQuestion[];
+  weakPoints: string[];
+  suggestions: string[];
+  updatedAt: number;
+  totalTokens?: number;
+  costCny?: number;
+}
+
 /** 一张卷面：拍照图片（IndexedDB）+ OCR 文字，作为卷面分析的输入 */
 export interface PaperScan {
   id: string;
@@ -98,6 +118,7 @@ export interface PaperScan {
   ocrText: string;
   imageKey: string;
   confidence: number;
+  analysis?: PaperAnalysis;
   createdAt: number;
   updatedAt: number;
 }

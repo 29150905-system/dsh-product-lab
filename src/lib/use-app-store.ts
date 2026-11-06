@@ -9,6 +9,7 @@ import type {
   ClassReport,
   GeneratedProfile,
   Lesson,
+  PaperAnalysis,
   PaperScan,
   Stage,
 } from "./types";
@@ -428,6 +429,20 @@ export function useAppStore() {
     [data, mutate],
   );
 
+  const savePaperAnalysis = useCallback(
+    (paperId: string, analysis: PaperAnalysis) => {
+      mutate((current) => ({
+        ...current,
+        papers: current.papers.map((paper) =>
+          paper.id === paperId
+            ? { ...paper, analysis, updatedAt: Date.now() }
+            : paper,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
   return {
     data,
     addClass,
@@ -446,5 +461,6 @@ export function useAppStore() {
     addPaper,
     updatePaper,
     deletePaper,
+    savePaperAnalysis,
   };
 }

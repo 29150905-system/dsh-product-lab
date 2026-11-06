@@ -26,11 +26,14 @@ function PapersContent() {
   const params = useParams<{ classId: string; assessmentId: string }>();
   const classId = params?.classId ?? "";
   const assessmentId = params?.assessmentId ?? "";
-  const { data, addPaper, updatePaper, deletePaper } = useAppStore();
+  const { data, addPaper, updatePaper, deletePaper, savePaperAnalysis } = useAppStore();
   const [busy, setBusy] = useState<BusyState>({ running: false, status: "", progress: 0 });
   const [error, setError] = useState("");
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<string>("");
+  const [aiConsent, setAiConsent] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState("");
+  const [analysisError, setAnalysisError] = useState<{ paperId: string; message: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const papers = data ? assessmentPapers(data, assessmentId) : [];
@@ -84,6 +87,77 @@ function PapersContent() {
   function onPick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) void handleFile(file);
+  }
+
+  useEffect(() => {
+    setAiConsent(window.localStorage.getItem("jingming:ai-consent:v1") === "1");
+  }, []);
+
+  function toggleConsent() {
+    const next = !aiConsent;
+    setAiConsent(next);
+    window.localStorage.setItem("jingming:ai-consent:v1", next ? "1" : "0");
+  }
+
+  async function analyzePaper(paperId: string) {
+    const paper = papers.find((item) => item.id === paperId);
+    if (!paper || analyzingId) return;
+    if (!aiConsent) {
+      setAnalysisError({ paperId, message: "先在上面的「AI 卷面分析」里点「开启」" });
+      return;
+    }
+    setAnalysisError(null);
+    setAnalyzingId(paperId);
+    try {
+      const imageDataUrl = thumbs[paper.imageKey] || (await getImage(paper.imageKey)) || "";
+      if (!imageDataUrl) throw new Error("找不到卷面图片，重新拍一张试试");
+      const response = await fetch("/api/paper-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examName: exam?.name ?? "考试",
+          fullScore: exam?.fullScore,
+          imageDataUrl,
+          ocrText: paper.ocrText,
+          studentLabel: paper.title,
+        }),
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        analysis?: {
+          summary: string;
+          questions: {
+            no: string;
+            type: string;
+            studentAnswer: string;
+            isCorrect: boolean | null;
+            errorReason: string;
+            knowledgePoint: string;
+          }[];
+          weakPoints: string[];
+          suggestions: string[];
+        };
+        usage?: { totalTokens?: number; costCny?: number };
+        message?: string;
+      };
+      if (!response.ok || !result.ok || !result.analysis) {
+        setError(result.message ?? `分析失败（HTTP ${response.status}）`);
+        return;
+      }
+      savePaperAnalysis(paperId, {
+        ...result.analysis,
+        updatedAt: Date.now(),
+        totalTokens: result.usage?.totalTokens,
+        costCny: result.usage?.costCny,
+      });
+    } catch (err) {
+      setAnalysisError({
+        paperId,
+        message: err instanceof Error ? err.message : "分析失败，请重试",
+      });
+    } finally {
+      setAnalyzingId("");
+    }
   }
 
   if (!data) return <PageSkeleton />;
@@ -156,6 +230,26 @@ function PapersContent() {
         ) : null}
       </section>
 
+      <section className="mt-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">AI 卷面分析</h2>
+            <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+              开启后，点卷面上的「AI 分析卷面」会把这页图片发给 DeepSeek 视觉模型，返回逐题错因和教学建议（约 ¥0.005/张）
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleConsent}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${
+              aiConsent ? "bg-emerald-50 text-emerald-700" : "border border-zinc-200 text-zinc-600"
+            }`}
+          >
+            {aiConsent ? "已开启" : "开启"}
+          </button>
+        </div>
+      </section>
+
       <section className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-500">已识别的卷面</h2>
@@ -213,10 +307,94 @@ function PapersContent() {
                   <span className="text-[11px] text-zinc-400">
                     {paper.ocrText.length} 字 · 约 {estimateQuestionCount(paper.ocrText)} 道题 · 失焦自动保存
                   </span>
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500">
-                    卷面分析 · 待接入
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => analyzePaper(paper.id)}
+                    disabled={analyzingId !== ""}
+                    className="rounded-full bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-40"
+                  >
+                    {analyzingId === paper.id
+                      ? "分析中…"
+                      : paper.analysis
+                        ? "重新分析"
+                        : "AI 分析卷面"}
+                  </button>
                 </div>
+
+                {analysisError && analysisError.paperId === paper.id ? (
+                  <p className="mt-2 rounded-xl bg-red-50 p-2 text-[11px] leading-5 text-red-700">
+                    {analysisError.message}
+                  </p>
+                ) : null}
+
+                {analyzingId === paper.id ? (
+                  <div className="mt-3 space-y-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="h-3 w-2/3 animate-pulse rounded-full bg-zinc-200" />
+                    <div className="h-3 w-full animate-pulse rounded-full bg-zinc-200" />
+                    <div className="h-3 w-5/6 animate-pulse rounded-full bg-zinc-200" />
+                    <p className="text-[11px] text-zinc-400">视觉模型正在看这张卷面，约 10 秒…</p>
+                  </div>
+                ) : null}
+
+                {paper.analysis ? (
+                  <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                    <p className="text-xs font-semibold text-zinc-700">卷面分析</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-700">{paper.analysis.summary}</p>
+
+                    {paper.analysis.questions.length > 0 ? (
+                      <ul className="mt-2 space-y-1.5">
+                        {paper.analysis.questions.map((question, index) => (
+                          <li key={index} className="flex gap-2 text-xs leading-5 text-zinc-600">
+                            <span
+                              className={`shrink-0 rounded px-1 font-medium ${
+                                question.isCorrect === false
+                                  ? "bg-red-50 text-red-700"
+                                  : question.isCorrect === true
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-zinc-100 text-zinc-500"
+                              }`}
+                            >
+                              {question.isCorrect === false
+                                ? "错"
+                                : question.isCorrect === true
+                                  ? "对"
+                                  : "?"}
+                            </span>
+                            <span>
+                              第{question.no}题
+                              {question.studentAnswer ? ` · 答：${question.studentAnswer}` : ""}
+                              {question.errorReason ? ` · ${question.errorReason}` : ""}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {paper.analysis.weakPoints.length > 0 ? (
+                      <p className="mt-2 text-xs leading-5 text-zinc-600">
+                        薄弱点：{paper.analysis.weakPoints.join("、")}
+                      </p>
+                    ) : null}
+
+                    {paper.analysis.suggestions.length > 0 ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-zinc-700">
+                        {paper.analysis.suggestions.map((suggestion, index) => (
+                          <li key={index}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    <p className="mt-2 text-[10px] text-zinc-400">
+                      {paper.analysis.totalTokens ? `${paper.analysis.totalTokens} tokens · ` : ""}
+                      {paper.analysis.costCny !== undefined
+                        ? `约 ¥${paper.analysis.costCny} · `
+                        : ""}
+                      {new Date(paper.analysis.updatedAt).toLocaleString("zh-CN", {
+                        hour12: false,
+                      })}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -224,7 +402,7 @@ function PapersContent() {
       </section>
 
       <p className="mt-6 text-center text-[11px] leading-5 text-zinc-400">
-        卷面图片与本机识别文字只存在这台设备 · 不会上传
+        卷面图片默认只存本机；开启 AI 分析后，单张图片会发给 DeepSeek 用于识别与错因分析
       </p>
     </div>
   );
